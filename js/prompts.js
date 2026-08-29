@@ -27,6 +27,7 @@ window.PW = window.PW || {};
       if (story.settings.optionsOn) {
         sys += '4. 如适合，可在最末尾给出2~4个简短行动建议，格式：[选项]\\n1. …\\n2. …（玩家可无视）。\n';
       }
+      sys += '5. 好感度与状态变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情，不可无脑上升；单次变化幅度不超过±10。\n';
       return sys;
     }
 
@@ -58,7 +59,7 @@ ${story.worldview.text || '（自由世界，由剧情逐步展开）'}`;
     if (tpl && tpl.mechanics) {
       sys += `\n【题材机制】\n${tpl.mechanics}`;
     }
-    sys += `\n【文风】${styleObj ? styleObj.desc : '细腻平衡'}\n【视角】${povText}
+    sys += `\n【文风】${(story.settings.styleNote || '').trim() || '自然流畅，贴合题材'}\n【视角】${povText}
 
 【玩家角色】
 ${playerCard}
@@ -83,13 +84,14 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 【输出格式（必须严格遵守）】
 1. 用中文推进剧情，每次回复约150~400字：旁白与对话交织，禁止大段流水账，禁止使用markdown标题/加粗/列表。
 2. 对话行格式：角色名："台词"（中文冒号+引号）。旁白行直接书写，不加名字。
-3. 绝不代替玩家做决定或描写玩家未声明的心理活动；NPC只对玩家已做的事做出反应。玩家行动遇到困难时如实呈现阻力，不自动成功。
+3. 【最高铁律】严禁代替玩家角色做任何决定；严禁描写玩家角色的心理活动、未声明的动作与台词；严禁让NPC替玩家回答或行动。剧情推进到需要玩家抉择时，必须停下等待玩家输入。NPC只对玩家已做的事做出反应。玩家行动遇到困难时如实呈现阻力，不自动成功。
 4. 回复正文结束后，若有NPC好感或状态变化，另起一行输出隐藏标记（系统会剔除，玩家不可见，不要解释它们）：
    [[AFF:NPC名:+3]] 或 [[AFF:NPC名:-2]]；[[STATE:NPC名:状态短语]]
 5. ${story.settings.optionsOn ? '正文与标记之后，另起一行给出2~4个简短行动选项，格式严格为：\n[选项]\n1. 选项一（10字内）\n2. 选项二\n3. 选项三\n（玩家可无视选项自由输入，选项要有多样性：推进/试探/保守各一）' : '不需要输出[选项]块。'}
 6. 若玩家消息以（　）包裹或以OOC:开头，视为作者指令：按其调整世界与剧情走向，但正文中不出现解释性文字。
 7. 手机剧情（若启用）：NPC发消息、朋友圈动态、微博等用标记：【微信|NPC名|内容】【朋友圈|NPC名|动态内容】，系统会路由到手机界面。
-8. 保持NPC言行与其性格、身份、秘密一致；重要伏笔可以埋设，长线剧情要能接得上记忆。`;
+8. 保持NPC言行与其性格、身份、秘密一致；重要伏笔可以埋设，长线剧情要能接得上记忆。
+9. 好感度变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情因果，不可无脑上升；单次变化幅度不超过±10。`;
 
     return sys;
   }
@@ -240,6 +242,28 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       { role: 'user', content: `你的微博：${postText}\n玩家(${story.player.name || '我'})评论：${comment}` }
     ];
   }
+  /* ---------- 微博：热搜词条 / 超话 详情 ---------- */
+  function hotDetailPrompt(story, hotText) {
+    const tpl = PW.TEMPLATES[story.genreKey];
+    const fandom = tpl && tpl.key === 'entertainment';
+    const artists = (story.npcs || []).filter(x => x.present !== false).map(x => `${x.name}（${x.identity || ''}）`).join('；');
+    return [
+      { role: 'system', content: `【任务：热搜详情】你是社交媒体内容生成器。针对一条热搜词条，生成微博正文与评论区。只输出JSON数组（不要代码块），每项：{"author":"npc:NPC名"或"marketing:账号名"或"netizen:昵称","text":"微博内容(120字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝/路人/黑粉,口吻有辨识度)","text":"评论(30字内)"}]}。共4~6条。${fandom ? '娱乐圈背景：评论区分唯粉/cpf/黑粉/路人，口吻要有饭圈辨识度。' : ''}` },
+      { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n热搜词条：${hotText}\n\n生成与该词条相关的微博和评论（内容要与词条和剧情呼应）。` }
+    ];
+  }
+  function supertopicPrompt(story, cha) {
+    const tpl = PW.TEMPLATES[story.genreKey];
+    const isCp = cha.type === 'cp';
+    const artists = (story.npcs || []).filter(x => x.present !== false).map(x => `${x.name}（${x.identity || ''}）`).join('；');
+    const theme = isCp
+      ? `这是CP超话「${cha.name}」，生成cp粉的磕糖帖、分析帖、二创安利（口吻：cpf，甜蜜疯了但要真实）；`
+      : `这是个人超话「${cha.name}」，生成唯粉的应援帖、生图安利、日程打卡（口吻：唯粉，护短且热情）；`;
+    return [
+      { role: 'system', content: `【任务：超话详情】你是社交媒体内容生成器，生成超话内的帖子流。只输出JSON数组（不要代码块），每项：{"author":"netizen:粉丝昵称","text":"帖子(100字内,超话社区口吻,可带#超话名#)","likes":数字,"comments":[{"name":"回复者","text":"回复(30字内)"}]}。共4~6条。${theme}` },
+      { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：${(story.chat.summary || '').slice(0, 200) || '（刚开始）'}\n\n生成「${cha.name}」超话的帖子流。` }
+    ];
+  }
   function momentReplyPrompt(story, npc, momentText, comment) {
     return [
       { role: 'system', content: '【任务：评论回复】你在扮演互动小说NPC「' + npc.name + '」（' + (npc.identity || '') + '，性格：' + (npc.personality || '').slice(0, 40) + '）。玩家在你的一条朋友圈下评论了，请以角色身份回复1条评论（30字内，符合人设与关系）。只输出回复内容。' },
@@ -250,6 +274,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
   window.PW.Prompts = {
     gmSystem, historyMessages, build, summaryPrompt, rosterBlock,
     worldviewPrompt, polishPrompt, npcGenPrompt,
-    proactiveChatPrompt, phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt, weiboReplyPrompt
+    proactiveChatPrompt, phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt, weiboReplyPrompt,
+    hotDetailPrompt, supertopicPrompt
   };
 })();

@@ -267,11 +267,9 @@
           <div class="ed-head"><h2>🌍 世界观</h2><span class="hint">AI 与剧情都以此为纲</span></div>
 
           <div class="set-group" style="margin-bottom:16px">
-            <div class="set-row">
-              <div class="s-label"><b>文风</b><span>GM 的笔触</span></div>
-              <select class="inp s-ctrl" style="width:auto" v-model="story.settings.styleId">
-                <option v-for="s in styleList" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
+            <div class="set-row" style="flex-direction:column;align-items:stretch">
+              <div class="s-label" style="margin-bottom:6px"><b>文风提示词</b><span>自由描述你想要的笔触，直接约束 GM 的写作风格</span></div>
+              <textarea class="inp" rows="2" v-model="story.settings.styleNote" placeholder="例如：香艳细腻，多氛围与肢体描写，节奏快，对话口语化带梗"></textarea>
             </div>
             <div class="set-row">
               <div class="s-label"><b>视角</b></div>
@@ -461,8 +459,47 @@
 
                 <!-- 微博：关注 / 热搜 / 超话 -->
                 <template v-else-if="phoneView==='weibo'">
-                  <div class="app-head"><button class="back" @click="phoneView='home'">‹</button><b>微博</b>
+                  <div class="app-head"><button class="back" @click="wbDetail ? backToWeibo() : (phoneView='home')">‹</button><b>{{ wbDetail ? wbDetail.title : '微博' }}</b>
                     <button class="op" @click="refreshWeibo" :disabled="wbBusy">{{ wbBusy ? '⏳' : '🔄' }}</button></div>
+
+                  <!-- 详情页：热搜词条 / 超话 -->
+                  <template v-if="wbDetail">
+                    <div class="wb-detail-sub" v-if="wbDetailKind==='cha'">💞 {{ wbDetail.type==='cp' ? 'CP超话' : '个人超话' }} · {{ wbDetail.readers }}阅读 · {{ wbDetail.postsN }}帖子</div>
+                    <div class="wb-detail-sub" v-else>🔥 热搜词条 <span v-if="wbDetail.tag" class="h-tag" :class="'t-' + wbDetail.tag">{{ wbDetail.tag }}</span></div>
+                    <div class="app-body" style="padding-top:6px">
+                      <div class="wx-empty" v-if="wbDetailBusy">正在根据剧情生成相关微博和评论……</div>
+                      <div class="wx-empty" v-else-if="!wbDetailPosts.length">暂无相关内容，点右上角 🔄 重试</div>
+                      <div class="wb-post" v-for="p in wbDetailPosts" :key="p.id">
+                        <div class="avatar" :class="{ 'mk-ava': p.authorType==='marketing' }">
+                          <img v-if="p.authorType==='npc' && npcById(p.npcId) && avSrc(npcById(p.npcId))" :src="avSrc(npcById(p.npcId))" alt="">
+                          <template v-else>{{ p.authorType==='marketing' ? '📣' : '🧑‍💻' }}</template>
+                        </div>
+                        <div class="wb-body">
+                          <div class="r1"><b :class="{ 'npc-name': p.authorType==='npc' }">{{ p.name }}</b>
+                            <span class="wb-handle">{{ p.handle }}</span>
+                            <button class="wb-fol" v-if="p.authorType==='npc'" @click="toggleFollow(p.npcId)">{{ isFollowed(p.npcId) ? '已关注' : '+ 关注' }}</button>
+                          </div>
+                          <div class="wb-text">{{ p.text }}</div>
+                          <div class="wb-foot">
+                            <time>{{ fmtRel(p.ts) }}</time>
+                            <button :class="{on: p.likedByMe}" @click="p.likedByMe=!p.likedByMe; p.likes += p.likedByMe?1:-1">👍 {{ p.likes }}</button>
+                            <span>🔁 {{ p.reposts }}</span>
+                            <button @click="cmtFor = cmtFor===p.id ? null : p.id">💬 {{ p.comments.length }}</button>
+                          </div>
+                          <div class="mo-comments" v-if="p.comments.length">
+                            <div class="cmt" v-for="c in p.comments" :key="c.id"><b>{{ c.name }}：</b>{{ c.text }}</div>
+                          </div>
+                          <div class="mo-comment-input" v-if="cmtFor===p.id">
+                            <input v-model="cmtText" placeholder="评论一句…" @keyup.enter="sendCmt(p)">
+                            <button class="btn sm primary" @click="sendCmt(p)" :disabled="!cmtText">发送</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
+                  <!-- 列表页 -->
+                  <template v-else>
                   <div class="app-tabs">
                     <button :class="{on: wbTab==='feed'}" @click="wbTab='feed'">关注</button>
                     <button :class="{on: wbTab==='hot'}" @click="wbTab='hot'">热搜</button>
@@ -502,8 +539,8 @@
                   <div class="app-body" v-else-if="wbTab==='hot'">
                     <div class="wx-empty" v-if="!story.phone.weibo.hot.length && !wbBusy">还没有热搜，点右上角 🔄</div>
                     <div class="wb-hot" v-if="story.phone.weibo.hot.length">
-                      <div class="h-title">🔥 微博热搜榜</div>
-                      <div class="h-item" v-for="h in story.phone.weibo.hot" :key="h.rank">
+                      <div class="h-title">🔥 微博热搜榜 <span style="font-size:11px;color:var(--ink3);font-weight:400">点词条看相关微博</span></div>
+                      <div class="h-item h-click" v-for="h in story.phone.weibo.hot" :key="h.rank" @click="openHotDetail(h)">
                         <span class="rk">{{ h.rank }}</span>
                         <span>{{ h.text }}</span>
                         <span class="h-tag" v-if="h.tag" :class="'t-' + h.tag">{{ h.tag }}</span>
@@ -514,15 +551,16 @@
 
                   <div class="app-body" v-else>
                     <div class="wx-empty" v-if="!story.phone.weibo.supertopics.length && !wbBusy">还没有超话，点右上角 🔄</div>
-                    <div class="wb-cha" v-for="(c, ci) in story.phone.weibo.supertopics" :key="ci">
+                    <div class="wb-cha h-click" v-for="(c, ci) in story.phone.weibo.supertopics" :key="ci" @click="openChaDetail(c)">
                       <div class="cha-ava">{{ c.type==='cp' ? '💞' : '⭐' }}</div>
                       <div class="cha-info">
                         <div class="cha-name">{{ c.name }} <span class="chip" style="font-size:10px">{{ c.type==='cp' ? 'CP超话' : '个人超话' }}</span></div>
-                        <div class="cha-num">{{ c.readers }}阅读 · {{ c.postsN }}帖子</div>
+                        <div class="cha-num">{{ c.readers }}阅读 · {{ c.postsN }}帖子 · 点进看帖子流</div>
                       </div>
-                      <button class="cha-sign" :class="{on: c.signed}" @click="c.signed=!c.signed">{{ c.signed ? '已签到' : '签到' }}</button>
+                      <button class="cha-sign" :class="{on: c.signed}" @click.stop="c.signed=!c.signed">{{ c.signed ? '已签到' : '签到' }}</button>
                     </div>
                   </div>
+                  </template>
                 </template>
 
               </div>

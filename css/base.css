@@ -37,6 +37,31 @@ html, body { height: 100%; }
   pointer-events: none; display: none;
 }
 #app { position: relative; z-index: 1; }
+
+/* 自定义背景开启时：剧情层半透明透出背景 */
+html.has-bg .msg .narr,
+html.has-bg .msg .say .bubble,
+html.has-bg .fmt-quote,
+html.has-bg .fmt-cast,
+html.has-bg .fmt-aff,
+html.has-bg .fmt-psycho,
+html.has-bg .fmt-aside {
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+html.has-bg .tabbar {
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+}
+html.has-bg .topbar {
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+}
+html.has-bg .inputbar {
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+}
+html.has-bg .plot-tools .tool {
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+}
 body {
   font-family: -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", sans-serif;
   background: var(--bg); color: var(--ink);

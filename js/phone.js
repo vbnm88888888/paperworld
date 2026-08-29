@@ -151,5 +151,55 @@ window.PW = window.PW || {};
     return reply;
   }
 
-  window.PW.Phone = { wechatSend, proactiveWechat, genMoments, genWeibo, commentOnPost };
+  /* ---------- 微博：热搜词条详情 ---------- */
+  async function hotDetail(story, hotText) {
+    const { content } = await PW.Api.chat({ messages: PW.Prompts.hotDetailPrompt(story, hotText), stream: false, temperature: 1.4 });
+    let text = (content || '').trim();
+    const m = text.match(/\[[\s\S]*\]/);
+    if (m) text = m[0];
+    let arr;
+    try { arr = JSON.parse(text); } catch (e) { throw new Error('解析失败，请重试'); }
+    return arr.slice(0, 8).map(it => buildPost(story, it));
+  }
+
+  /* ---------- 微博：超话帖子流 ---------- */
+  async function supertopicFeed(story, cha) {
+    const { content } = await PW.Api.chat({ messages: PW.Prompts.supertopicPrompt(story, cha), stream: false, temperature: 1.4 });
+    let text = (content || '').trim();
+    const m = text.match(/\[[\s\S]*\]/);
+    if (m) text = m[0];
+    let arr;
+    try { arr = JSON.parse(text); } catch (e) { throw new Error('解析失败，请重试'); }
+    return arr.slice(0, 8).map(it => buildPost(story, it));
+  }
+
+  /* 统一构造帖子对象 */
+  function buildPost(story, it) {
+    const author = String(it.author || 'netizen:路人');
+    let post;
+    if (author.startsWith('npc:')) {
+      const npc = findNpc(story, author.slice(4));
+      post = npc
+        ? { authorType: 'npc', npcId: npc.id, name: npc.name, handle: '@' + npc.name + '工作号' }
+        : { authorType: 'netizen', npcId: null, name: author.slice(4) || '路人', handle: '@' + author.slice(4) };
+    } else if (author.startsWith('marketing:')) {
+      const name = author.slice(10) || '内娱观察bot';
+      post = { authorType: 'marketing', npcId: null, name, handle: '@' + name };
+    } else {
+      const name = author.replace(/^netizen:/, '') || '热心网友';
+      post = { authorType: 'netizen', npcId: null, name, handle: '@' + name.slice(0, 8) + '_用户' };
+    }
+    post.id = PW.Store.uid('wb');
+    post.text = String(it.text || '').slice(0, 200);
+    post.ts = Date.now() - Math.floor(Math.random() * 7200e3);
+    post.likes = Math.max(0, parseInt(it.likes, 10) || Math.floor(Math.random() * 900));
+    post.reposts = Math.max(0, parseInt(it.reposts, 10) || Math.floor(Math.random() * 300));
+    post.likedByMe = false;
+    post.comments = (it.comments || []).slice(0, 5).map(c => ({
+      id: PW.Store.uid('c'), name: String(c.name || '路人'), text: String(c.text || '').slice(0, 60)
+    }));
+    return post;
+  }
+
+  window.PW.Phone = { wechatSend, proactiveWechat, genMoments, genWeibo, commentOnPost, hotDetail, supertopicFeed };
 })();

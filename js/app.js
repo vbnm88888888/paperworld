@@ -47,6 +47,10 @@
         wxTab: 'chat',
         wbTab: 'feed',
         wxProBusy: false,
+        wbDetail: null,        // {title, tag} 热搜详情 或 {name, type} 超话
+        wbDetailKind: '',      // 'hot' | 'cha'
+        wbDetailBusy: false,
+        wbDetailPosts: [],
         wxNpc: null,
         phoneInput: '',
         wxBusy: false, moBusy: false, wbBusy: false,
@@ -164,6 +168,7 @@
         if (this.settings.theme === 'auto') dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         this._resolvedTheme = dark ? 'dark' : 'light';
         document.documentElement.dataset.theme = this._resolvedTheme;
+        document.documentElement.classList.toggle('has-bg', !!(this.settings.bg && this.settings.bg.img));
         // 剧情字号
         document.documentElement.style.setProperty('--plot-font', (this.settings.plotFont || 17) + 'px');
         // 自定义背景
@@ -283,6 +288,7 @@
         if (!Array.isArray(st.phone.weibo.hot)) st.phone.weibo.hot = [];
         if (!Array.isArray(st.phone.weibo.posts)) st.phone.weibo.posts = [];
         if (!Array.isArray(st.phone.weibo.supertopics)) st.phone.weibo.supertopics = [];
+        if (st.settings.styleNote == null) st.settings.styleNote = '';
         st.updatedAt = Date.now();
         this.tab = 'plot'; this.view = 'story';
         this.phoneView = 'home'; this.wxTab = 'chat'; this.wbTab = 'feed';
@@ -1189,6 +1195,25 @@
         catch (e) { if (!silent) this.showError(e); }
         finally { this.wbBusy = false; }
       },
+      async openHotDetail(h) {
+        this.wbDetail = { title: h.text, tag: h.tag };
+        this.wbDetailKind = 'hot';
+        this.wbDetailPosts = [];
+        this.wbDetailBusy = true;
+        try { this.wbDetailPosts = await PW.Phone.hotDetail(this.story, h.text); }
+        catch (e) { this.showError(e); this.wbDetail = null; }
+        finally { this.wbDetailBusy = false; }
+      },
+      async openChaDetail(c) {
+        this.wbDetail = { title: c.name, type: c.type, readers: c.readers, postsN: c.postsN };
+        this.wbDetailKind = 'cha';
+        this.wbDetailPosts = [];
+        this.wbDetailBusy = true;
+        try { this.wbDetailPosts = await PW.Phone.supertopicFeed(this.story, c); }
+        catch (e) { this.showError(e); this.wbDetail = null; }
+        finally { this.wbDetailBusy = false; }
+      },
+      backToWeibo() { this.wbDetail = null; this.wbDetailPosts = []; },
 
       /* ---------- Tab 切换 ---------- */
       switchTab(id) {
