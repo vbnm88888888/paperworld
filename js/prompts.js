@@ -13,6 +13,23 @@ window.PW = window.PW || {};
   function gmSystem(story, layers) {
     const tpl = PW.TEMPLATES[story.genreKey];
     const styleObj = PW.STYLES.find(s => s.id === story.settings.styleId);
+
+    /* 自定义核心指令：替换默认 GM 规则 */
+    if (story.useCoreInstruction && story.coreInstruction && story.coreInstruction.trim()) {
+      let sys = story.coreInstruction.trim();
+      /* 附加当前角色状态速览，保证好感度/人员与界面一致 */
+      const roster = rosterBlock(story);
+      if (roster) sys += '\n\n' + roster;
+      sys += '\n\n【系统附加协议（最高优先级，不可违反）】\n'
+        + '1. 用中文回复。\n'
+        + '2. 绝不代替玩家角色做决定，绝不描写玩家角色未声明的行动与心理；其他角色只对玩家已声明的行为做出反应。\n'
+        + '3. 若有角色好感或状态变化，可在回复末尾另起一行输出隐藏标记（系统自动剔除，玩家不可见，不要在正文解释）：[[AFF:NPC名:+3]] 或 [[AFF:NPC名:-2]]、[[STATE:NPC名:状态短语]]。\n';
+      if (story.settings.optionsOn) {
+        sys += '4. 如适合，可在最末尾给出2~4个简短行动建议，格式：[选项]\\n1. …\\n2. …（玩家可无视）。\n';
+      }
+      return sys;
+    }
+
     const povText = story.settings.pov === 'first'
       ? '叙事视角：第一人称——旁白以玩家角色"我"的口吻描述其行动与感官（但不代玩家做决定）'
       : '叙事视角：第三人称——旁白客观描述玩家角色与世界的互动（不代玩家做决定）';
@@ -75,6 +92,21 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 8. 保持NPC言行与其性格、身份、秘密一致；重要伏笔可以埋设，长线剧情要能接得上记忆。`;
 
     return sys;
+  }
+
+  /* 当前角色状态速览（注入核心指令之后，保证界面与AI数据一致） */
+  function rosterBlock(story) {
+    const p = story.player || {};
+    let out = '';
+    if (p.name) out += '【玩家角色速览】' + p.name + (p.gender ? '（' + p.gender + (p.age ? '，' + p.age : '') + '）' : '') + '。人设：' + (p.persona || '由对话展现') + '\n';
+    const npcs = (story.npcs || []).filter(n => n.present !== false);
+    if (npcs.length) {
+      out += '【当前NPC状态速览（好感度为界面实时值，需保持连贯）】\n';
+      npcs.forEach(n => {
+        out += '- ' + n.name + '：' + (n.identity || '') + '；好感度 ' + (n.affinity == null ? 50 : n.affinity) + '/100' + (n.state ? '；状态：' + n.state : '') + (n.secret ? '；秘密(不可主动揭露)' : '') + '\n';
+      });
+    }
+    return out.trim();
   }
 
   /* ---------- L1：最近消息 → 对话历史 ---------- */
@@ -150,6 +182,16 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     ];
   }
 
+  /* ---------- 手机：NPC主动发微信 ---------- */
+  function proactiveChatPrompt(story) {
+    const cast = (story.npcs || []).filter(x => x.present !== false)
+      .map(x => `${x.name}（${x.identity || ''}；性格：${(x.personality || '').slice(0, 30)}；好感度${x.affinity == null ? 50 : x.affinity}）`).join('；');
+    return [
+      { role: 'system', content: '【任务：微信主动消息】你是互动小说的社交模拟器。根据剧情进展，挑选一位【最有可能主动联系玩家】的NPC，让TA在微信上主动发来消息。只输出JSON对象（不要代码块）：{"npc":"NPC名","messages":["第一条","第二条"],"why":"简短理由(12字内)"}。消息要完全贴合该NPC的性格、说话风格与当前剧情，1~3条，口语化、像真的微信。' },
+      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成主动消息。` }
+    ];
+  }
+
   /* ---------- 手机：微信聊天 ---------- */
   function phoneChatMessages(story, npc, userText, chatHistory) {
     const recent = (chatHistory || []).slice(-8).map(m =>
@@ -160,21 +202,42 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     ];
   }
 
-  /* ---------- 手机：朋友圈 / 微博生成 ---------- */
+  /* ---------- 手机：朋友圈（并入微信） ---------- */
   function momentsPrompt(story, n) {
+    const tpl = PW.TEMPLATES[story.genreKey];
+    const fandom = tpl && tpl.key === 'entertainment';
     const cast = (story.npcs || []).filter(x => x.present !== false)
       .map(x => `${x.name}（${x.identity || ''}，性格：${(x.personality || '').slice(0, 30)}）`).join('；');
+    const flavor = fandom
+      ? '这是娱乐圈故事：动态要带饭圈生态感（剧组日常、炒作、内涵、粉丝评论用唯粉/cpf/黑粉口吻，可带#话题#）。'
+      : '动态符合人设与近况，可带emoji。';
     return [
-      { role: 'system', content: '【任务：朋友圈】你是社交媒体内容生成器，为互动小说里的NPC们生成朋友圈动态。只输出JSON数组（不要代码块），每项：{"npc":"NPC名","text":"动态内容(80字内,符合人设与近况,可配emoji)","likes":数字,"comments":[{"name":"NPC名","text":"评论(30字内)"}]}。' },
-      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n最近剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成${n}条与剧情有微妙关联的朋友圈动态（可以互相评论）。` }
+      { role: 'system', content: `【任务：朋友圈】你是社交媒体内容生成器，为互动小说里的NPC们生成微信朋友圈动态。只输出JSON数组（不要代码块），每项：{"npc":"NPC名","text":"动态内容(80字内)","likes":数字,"comments":[{"name":"名字(NPC或粉丝)","text":"评论(30字内)"}]}。${flavor}` },
+      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n最近剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成${n}条与剧情有微妙关联的朋友圈动态（可互相评论）。` }
     ];
   }
   function weiboPrompt(story) {
     const tpl = PW.TEMPLATES[story.genreKey];
-    const cast = (story.npcs || []).map(x => x.name).join('、');
+    const fandom = tpl && tpl.key === 'entertainment';
+    const artists = (story.npcs || []).filter(x => x.present !== false)
+      .map(x => `${x.name}（${x.identity || ''}）`).join('；');
+    const player = story.player.name || '玩家';
+    const req = fandom
+      ? `这是娱乐圈故事，参考现实饭圈生态：
+- 热搜词条必须与艺人NPC强相关（新剧/绯闻/机场图/塌房预警/番位之争/红毯造型等），带标签：沸/爆/热/新；
+- 微博类型要多样：艺人NPC本尊发言（口吻贴合人设，可带#话题#）、工作室声明、营销号爆料（账号名如"内娱观察bot""瓜田里的猹"）、普通网友吃瓜；
+- 评论区分粉圈阵营：唯粉、cpf（磕cp的）、妈妈粉、黑粉、路人，说话口吻要有辨识度；
+- 超话：每位主要艺人一个个人超话（阅读量/帖子数要像真的），并且生成一个"玩家×某NPC"或"某NPC×某NPC"的CP超话；`
+      : `微博内容与世界观和剧情呼应：NPC本人发言贴合人设，营销号/网友围绕剧情事件讨论，评论自然多样；超话按剧情里的话题生成；`;
     return [
-      { role: 'system', content: '【任务：微博】你是社交媒体内容生成器，为互动小说生成微博内容。只输出JSON对象（不要代码块）：{"hot":["热搜词条1","词条2","词条3","词条4","词条5"],"posts":[{"npc":"NPC名","text":"微博内容(100字内,符合人设)","likes":数字}]}' },
-      { role: 'user', content: `故事：${story.title}（题材：${tpl ? tpl.name : '自定'}）\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色：${cast}\n近期剧情：${(story.chat.summary || '').slice(0, 200) || '（刚开始）'}\n\n生成5个与世界观/剧情呼应的热搜词条（要吃瓜感）和3条NPC微博。` }
+      { role: 'system', content: `【任务：微博】你是社交媒体内容生成器，为互动小说生成完整的微博生态。只输出JSON对象（不要代码块）：\n{"hot":[{"text":"热搜词条","tag":"沸|爆|热|新之一","heat":"234.5万"}],\n"posts":[{"author":"npc:NPC名","text":"微博正文(100字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝名/路人/其他NPC)","text":"评论内容(30字内)"}]},\n{"author":"marketing:账号名",...同上},\n{"author":"netizen:昵称",...同上}],\n"supertopics":[{"name":"超话名","type":"个人或cp","readers":"1.2亿","postsN":"56.7万"}]}\n作者类型：npc:开头=NPC本人；marketing:=营销号；netizen:=普通网友。` },
+      { role: 'user', content: `故事：${story.title}\n世界观：${(story.worldview.text || '').slice(0, 200)}\n角色（艺人/人物）：${artists}\n玩家：${player}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n${req}\n\n生成：6条热搜、8条微博（至少2条营销号+2条路人网友+2条NPC本人+1条工作室风）、4个超话（含至少1个CP超话）。` }
+    ];
+  }
+  function weiboReplyPrompt(story, npc, postText, comment) {
+    return [
+      { role: 'system', content: `【任务：微博回复】你在扮演互动小说NPC「${npc.name}」（${npc.identity || ''}，性格：${(npc.personality || '').slice(0, 40)}）。玩家在TA的微博评论区评论了，以角色口吻回复1条（30字内，符合人设——明星则注意半公开语感）。只输出回复内容。` },
+      { role: 'user', content: `你的微博：${postText}\n玩家(${story.player.name || '我'})评论：${comment}` }
     ];
   }
   function momentReplyPrompt(story, npc, momentText, comment) {
@@ -185,8 +248,8 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
   }
 
   window.PW.Prompts = {
-    gmSystem, historyMessages, build, summaryPrompt,
+    gmSystem, historyMessages, build, summaryPrompt, rosterBlock,
     worldviewPrompt, polishPrompt, npcGenPrompt,
-    phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt
+    proactiveChatPrompt, phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt, weiboReplyPrompt
   };
 })();

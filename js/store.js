@@ -74,20 +74,30 @@ window.PW = window.PW || {};
     };
   }
 
-  /* ---------- 头像压缩 ---------- */
-  function compressImage(file, cb) {
+  /* ---------- 头像/背景压缩 ---------- */
+  function compressImage(file, maxPx, cb) {
+    if (typeof maxPx === 'function') { cb = maxPx; maxPx = PW.CONFIG.MAX_AVATAR_PX; }
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
       img.onload = () => {
-        const size = PW.CONFIG.MAX_AVATAR_PX;
+        // 长边不超过 maxPx（头像正方形裁剪；背景保持比例）
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale), h = Math.round(img.height * scale);
         const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = size;
+        canvas.width = w; canvas.height = h;
         const ctx = canvas.getContext('2d');
-        // 居中裁剪为正方形
-        const min = Math.min(img.width, img.height);
-        ctx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, size, size);
-        cb(canvas.toDataURL('image/jpeg', 0.78));
+        if (maxPx === PW.CONFIG.MAX_AVATAR_PX) {
+          const min = Math.min(img.width, img.height);
+          const c2 = document.createElement('canvas');
+          c2.width = c2.height = maxPx;
+          const cx = c2.getContext('2d');
+          cx.drawImage(img, (img.width - min) / 2, (img.height - min) / 2, min, min, 0, 0, maxPx, maxPx);
+          cb(c2.toDataURL('image/jpeg', 0.78));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        cb(canvas.toDataURL('image/jpeg', 0.72));
       };
       img.src = reader.result;
     };

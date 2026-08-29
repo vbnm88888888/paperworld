@@ -9,7 +9,7 @@
 .msg { margin-bottom: 16px; position: relative; }
 
 .msg .narr {
-  color: var(--ink2); font-size: 14.5px; line-height: 1.85; text-align: justify;
+  color: var(--ink2); font-size: var(--plot-font, 17px); line-height: 1.85; text-align: justify;
   padding: 2px 4px;
 }
 .msg .narr::before { content: '❝ '; color: var(--ink3); font-size: 12px; }
@@ -20,7 +20,7 @@
 .msg .say .name { font-size: 12px; color: var(--ink3); margin-bottom: 3px; padding-left: 4px; }
 .msg .say .bubble {
   background: var(--bubble-npc); border-radius: 4px 16px 16px 16px;
-  padding: 10px 13px; box-shadow: var(--shadow); font-size: 15px; line-height: 1.7;
+  padding: 10px 13px; box-shadow: var(--shadow); font-size: var(--plot-font, 17px); line-height: 1.7;
   white-space: pre-wrap; word-break: break-word;
 }
 
@@ -29,7 +29,7 @@
   background: var(--bubble-me); color: #fff;
   border-radius: 16px 4px 16px 16px; padding: 10px 13px;
   max-width: 78%; box-shadow: 0 3px 12px color-mix(in srgb, var(--acc) 30%, transparent);
-  white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-word; font-size: var(--plot-font, 17px); line-height: 1.7;
 }
 
 /* 系统/指令类消息：居中小条 */
@@ -49,6 +49,53 @@
 }
 .msg:hover .msg-tools { opacity: 1; }
 .msg .msg-tools button { font-size: 12px; color: var(--ink3); background: var(--card); border-radius: 8px; padding: 3px 8px; box-shadow: var(--shadow); }
+
+/* ---------- 结构化格式卡片 ---------- */
+.fmt-time, .fmt-scene {
+  font-size: 13px; font-weight: 700; color: var(--acc);
+  margin: 14px 0 8px; padding-left: 2px;
+}
+.fmt-scene { color: var(--ink2); font-weight: 600; }
+.fmt-quote {
+  background: var(--card); border-radius: 14px; padding: 11px 13px;
+  box-shadow: var(--shadow); margin: 10px 0; font-size: 13px; line-height: 1.75;
+  border-left: 3px solid var(--acc);
+  white-space: pre-wrap; word-break: break-word;
+  color: var(--ink2);
+}
+.fmt-quote.q-map { border-left-color: #2ea86b; }
+.fmt-quote.q-schedule { border-left-color: #e8930c; }
+.fmt-quote.q-explore { border-left-color: #b06ef7; }
+.fmt-quote-title { font-weight: 800; color: var(--ink); margin-bottom: 4px; }
+.fmt-quote-body .fmt-done { color: var(--ok); }
+.fmt-cast, .fmt-aff {
+  background: var(--card); border-radius: 14px; padding: 11px 13px;
+  box-shadow: var(--shadow); margin: 10px 0;
+}
+.fmt-cast-title { font-size: 12px; font-weight: 800; color: var(--acc); margin-bottom: 6px; }
+.fmt-cast-item { font-size: 13.5px; line-height: 1.75; margin-bottom: 6px; color: var(--ink2); }
+.fmt-cast-item b { color: var(--ink); margin-right: 6px; }
+.fmt-aff-row { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 13px; }
+.fmt-aff-row .fan { font-weight: 700; color: var(--ink); min-width: 3em; }
+.fmt-aff-row .abar { flex: 1; height: 5px; border-radius: 3px; background: var(--line); position: relative; }
+.fmt-aff-row .abar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.fmt-aff-row .abar .zero { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--ink3); }
+.fmt-aff-row .fav { font-size: 12px; font-weight: 700; color: var(--acc); width: 40px; text-align: right; }
+.fmt-aff-row .fas { font-size: 11.5px; color: var(--ink3); }
+.fmt-aside {
+  background: var(--card2); border-radius: 12px; padding: 10px 13px; margin: 10px 0;
+  font-size: 12.5px; color: var(--ink2); line-height: 1.7; border: 1px dashed var(--line);
+}
+.fmt-aside .fmt-cast-title { margin-bottom: 3px; }
+.fmt-psycho {
+  background: color-mix(in srgb, var(--acc) 7%, var(--card));
+  border-radius: 14px; padding: 11px 13px; margin: 12px 0;
+  border: 1px solid color-mix(in srgb, var(--acc) 25%, transparent);
+}
+.fmt-psycho-line {
+  font-size: 13px; font-style: italic; color: var(--ink2); line-height: 1.8;
+  margin-bottom: 4px; word-break: break-word;
+}
 
 /* 选项 */
 .choices { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 4px 47px; }

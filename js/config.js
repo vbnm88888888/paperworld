@@ -7,8 +7,11 @@ PW.CONFIG = {
 
   DEFAULT_API_BASE: 'https://api.deepseek.com',
   MODELS: [
-    { id: 'deepseek-chat', name: 'DeepSeek-V3 · 默认 · 快' },
-    { id: 'deepseek-reasoner', name: 'DeepSeek-R1 · 深度推演 · 慢' }
+    { id: 'deepseek-v4-flash', name: 'DeepSeek-V4 Flash · 默认 · 快' },
+    { id: 'deepseek-v4-pro', name: 'DeepSeek-V4 Pro · 更强' },
+    { id: 'deepseek-v4-flash-vision-exp', name: 'V4 Flash Vision · 实验版(识图)' },
+    { id: 'deepseek-chat', name: 'deepseek-chat · 旧版兼容' },
+    { id: 'deepseek-reasoner', name: 'deepseek-reasoner · 旧版R1' }
   ],
   DEFAULT_TEMPERATURE: 1.3,
 
@@ -31,12 +34,15 @@ PW.CONFIG = {
 PW.DEFAULT_SETTINGS = {
   apiKey: '',
   apiBase: PW.CONFIG.DEFAULT_API_BASE,
-  model: 'deepseek-chat',
+  model: 'deepseek-v4-flash',
   temperature: PW.CONFIG.DEFAULT_TEMPERATURE,
   theme: 'auto',                 // auto | light | dark
   memoryMode: 'bm25',            // bm25 | semantic
   topK: PW.CONFIG.TOP_K,
   recentTurns: PW.CONFIG.RECENT_TURNS,
+  customModels: [],              // 用户自定义模型ID
+  plotFont: 17,                  // 剧情字号 px
+  bg: { img: '', opacity: 0.35, blur: 0 },  // 自定义背景
   guideSeen: false,
   lastErr: ''
 };

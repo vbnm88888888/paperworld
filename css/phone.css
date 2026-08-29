@@ -32,7 +32,7 @@
 .p-app span { font-size: 11px; color: rgba(255,255,255,.9); }
 .p-app .red-dot { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b30; color: #fff; font-size: 10.5px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid rgba(255,255,255,.25); }
 
-/* App 通用头部 */
+/* App 通用头部 + 内部Tab */
 .app-head {
   display: flex; align-items: center; gap: 10px;
   padding: 10px 14px; background: var(--card2); border-bottom: 1px solid var(--line);
@@ -40,6 +40,18 @@
 .app-head .back { font-size: 20px; width: 30px; }
 .app-head b { flex: 1; text-align: center; font-size: 15.5px; }
 .app-head .op { font-size: 16px; width: 30px; text-align: right; }
+.app-tabs {
+  display: flex; background: var(--card2); border-bottom: 1px solid var(--line);
+}
+.app-tabs button {
+  flex: 1; padding: 9px 0; font-size: 13.5px; color: var(--ink2);
+  position: relative; font-weight: 600;
+}
+.app-tabs button.on { color: var(--acc); }
+.app-tabs button.on::after {
+  content: ''; position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: 0; width: 28px; height: 3px; border-radius: 2px; background: var(--acc);
+}
 .app-body { flex: 1; overflow-y: auto; padding: 12px; }
 
 /* 微信会话列表 */
@@ -81,21 +93,51 @@
 .mo-comment-input { display: flex; gap: 8px; margin-top: 8px; }
 .mo-comment-input input { flex: 1; padding: 7px 11px; border-radius: 18px; border: 1.5px solid var(--line); background: var(--card); outline: none; font-size: 13px; }
 
-/* 微博 */
-.wb-hot { background: var(--card); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); margin-bottom: 14px; }
+/* 微博（饭圈生态） */
+.wb-hot { background: var(--card); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); }
 .wb-hot .h-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-.wb-hot .h-item { display: flex; align-items: center; gap: 9px; padding: 6px 0; font-size: 13.5px; border-bottom: 1px dashed var(--line); }
+.wb-hot .h-item { display: flex; align-items: center; gap: 9px; padding: 7px 0; font-size: 13.5px; border-bottom: 1px dashed var(--line); }
 .wb-hot .h-item:last-child { border-bottom: none; }
 .wb-hot .h-item .rk { width: 18px; font-weight: 800; font-style: italic; color: var(--ink3); font-size: 12px; }
 .wb-hot .h-item:nth-child(2) .rk, .wb-hot .h-item:nth-child(3) .rk, .wb-hot .h-item:nth-child(4) .rk { color: #e5484d; }
 .wb-hot .h-item .heat { margin-left: auto; font-size: 11px; color: var(--ink3); }
 .wb-post { display: flex; gap: 10px; padding: 13px 4px; border-bottom: 1px solid var(--line); }
-.wb-post .avatar { width: 42px; height: 42px; font-size: 20px; border-radius: 50%; }
+.wb-post .avatar { width: 42px; height: 42px; font-size: 19px; border-radius: 50%; }
+.wb-post .avatar.mk-ava { background: #3d3550; }
 .wb-post .wb-body { flex: 1; min-width: 0; }
-.wb-post .wb-body .r1 { display: flex; align-items: center; gap: 6px; }
-.wb-post .wb-body .r1 b { font-size: 14px; color: #d2691e; }
-.wb-post .wb-body .r1 time { font-size: 11px; color: var(--ink3); }
-.wb-post .wb-text { font-size: 14.5px; margin: 4px 0 8px; line-height: 1.65; word-break: break-word; }
-.wb-post .wb-foot { display: flex; gap: 22px; font-size: 12px; color: var(--ink3); }
+.wb-post .wb-body .r1 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wb-post .wb-body .r1 b { font-size: 14px; color: #d2883c; }
+.wb-post .wb-body .r1 b.npc-name { color: #e6a23c; }
+.wb-post .wb-handle { font-size: 11px; color: var(--ink3); }
+.wb-fol {
+  margin-left: auto; font-size: 11.5px; color: #fff; background: #e6552e;
+  border-radius: 14px; padding: 2px 10px;
+}
+.wb-post .wb-text { font-size: 14.5px; margin: 4px 0 8px; line-height: 1.65; word-break: break-word; white-space: pre-wrap; }
+.wb-post .wb-foot { display: flex; gap: 16px; font-size: 12px; color: var(--ink3); align-items: center; }
 .wb-post .wb-foot button { font-size: 12px; color: var(--ink3); display: flex; gap: 3px; align-items: center; }
 .wb-post .wb-foot button.on { color: #e6552e; }
+.wb-hot .h-item .h-tag {
+  font-size: 10px; color: #fff; border-radius: 4px; padding: 0 4px; margin-left: 4px;
+  background: #e8930c;
+}
+.wb-hot .h-item .h-tag.t-沸 { background: #e5484d; }
+.wb-hot .h-item .h-tag.t-爆 { background: #e5484d; }
+.wb-hot .h-item .h-tag.t-热 { background: #e8930c; }
+.wb-hot .h-item .h-tag.t-新 { background: #2ea86b; }
+.wb-cha {
+  display: flex; align-items: center; gap: 11px;
+  background: var(--card); border-radius: 14px; padding: 12px; margin-bottom: 10px; box-shadow: var(--shadow);
+}
+.wb-cha .cha-ava {
+  width: 46px; height: 46px; border-radius: 12px; background: linear-gradient(135deg, #e6552e, #f7a04b);
+  display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0;
+}
+.wb-cha .cha-info { flex: 1; min-width: 0; }
+.wb-cha .cha-name { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.wb-cha .cha-num { font-size: 11.5px; color: var(--ink3); margin-top: 2px; }
+.wb-cha .cha-sign {
+  font-size: 12px; border: 1px solid #e6552e; color: #e6552e;
+  border-radius: 16px; padding: 4px 12px;
+}
+.wb-cha .cha-sign.on { background: #e6552e; color: #fff; }

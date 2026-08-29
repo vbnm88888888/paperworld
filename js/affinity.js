@@ -31,7 +31,7 @@ window.PW = window.PW || {};
     (parsed.affs || []).forEach(a => {
       const npc = find(a.name);
       if (npc) {
-        npc.affinity = Math.max(0, Math.min(100, (npc.affinity == null ? 50 : npc.affinity) + a.delta));
+        npc.affinity = Math.max(-100, Math.min(100, (npc.affinity == null ? 50 : npc.affinity) + a.delta));
         if (a.delta !== 0) fx.push({ type: 'aff', npc: npc.name, delta: a.delta });
       }
     });

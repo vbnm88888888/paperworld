@@ -25,6 +25,7 @@
         /* 书架/向导 */
         showSettings: false,
         keyVisible: false,
+        newModelId: '',
         wizard: { open: false, step: 0, genreKey: 'modern', title: '', idea: '', worldview: '', rules: [], npcs: [], player: { name: '', gender: '女', age: '', persona: '', avatar: null }, genBusy: false },
 
         /* NPC */
@@ -43,6 +44,9 @@
 
         /* 手机 */
         phoneView: 'home',
+        wxTab: 'chat',
+        wbTab: 'feed',
+        wxProBusy: false,
         wxNpc: null,
         phoneInput: '',
         wxBusy: false, moBusy: false, wbBusy: false,
@@ -63,6 +67,10 @@
         return list;
       },
       modelList() { return PW.CONFIG.MODELS; },
+      allModels() {
+        const custom = (this.settings.customModels || []).map(id => ({ id, name: id + ' · 自定义' }));
+        return PW.CONFIG.MODELS.concat(custom);
+      },
       styleList() { return PW.STYLES; },
       sortedStories() { return this.stories.slice().sort((a, b) => b.updatedAt - a.updatedAt); },
       tabs() {
@@ -87,6 +95,7 @@
         return t >= 10000 ? (t / 1000).toFixed(1) + 'k' : String(t);
       },
       worldTokens() { return this.story ? PW.Store.estTokens(this.story.worldview.text) : 0; },
+      coreTokens() { return this.story ? PW.Store.estTokens(this.story.coreInstruction || '') : 0; },
       gmAvatar() { return PW.Avatars.genAvatar('GM·纸上人间', this.story ? this.story.cover.c1 : null, this.story ? this.story.cover.c2 : null); },
       playerAvSrc() {
         const p = this.story && this.story.player;
@@ -102,7 +111,7 @@
       wizPlayerAv() { return this.avPair(this.wizard.player); },
       drawerAv() { return this.avPair(this.drawer.form); },
       drawerGenreKey() { return this.drawer.ctx === 'story' ? (this.story ? this.story.genreKey : 'blank') : this.wizard.genreKey; },
-      streamBlocks() { return this.parseAiBlocks(this.stripLive(this.streamText)); },
+      streamBlocks() { return this.parseStructured(this.stripLive(this.streamText)); },
       memRecent() { return this.mem.records.slice(-40).reverse(); },
       clock() {
         const d = new Date();
@@ -149,13 +158,61 @@
 
     methods: {
       /* ---------- 主题 ---------- */
+      /* ---------- 主题与外观 ---------- */
       applyTheme() {
         let dark = this.settings.theme === 'dark';
         if (this.settings.theme === 'auto') dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         this._resolvedTheme = dark ? 'dark' : 'light';
         document.documentElement.dataset.theme = this._resolvedTheme;
+        // 剧情字号
+        document.documentElement.style.setProperty('--plot-font', (this.settings.plotFont || 17) + 'px');
+        // 自定义背景
+        let bgEl = document.getElementById('app-bg');
+        const bg = this.settings.bg;
+        if (bg && bg.img) {
+          if (!bgEl) {
+            bgEl = document.createElement('div');
+            bgEl.id = 'app-bg';
+            document.body.insertBefore(bgEl, document.body.firstChild);
+          }
+          bgEl.style.backgroundImage = 'url(' + bg.img + ')';
+          bgEl.style.opacity = bg.opacity;
+          bgEl.style.filter = 'blur(' + (bg.blur || 0) + 'px)';
+          bgEl.style.display = 'block';
+        } else if (bgEl) {
+          bgEl.style.display = 'none';
+        }
+      },
+      onBgFile(ev) {
+        const f = ev.target.files && ev.target.files[0];
+        if (!f) return;
+        PW.Store.compressImage(f, 1024, url => {
+          if (!this.settings.bg) this.settings.bg = { img: '', opacity: 0.35, blur: 0 };
+          this.settings.bg = { img: url, opacity: 0.35, blur: 0 };
+          this.applyTheme();
+          this.toast('背景已更换', '🖼');
+        });
+        ev.target.value = '';
+      },
+      clearBg() {
+        this.settings.bg = { img: '', opacity: 0.35, blur: 0 };
+        this.applyTheme();
       },
       cycleTheme() { this.settings.theme = this._resolvedTheme === 'dark' ? 'light' : 'dark'; },
+      addCustomModel() {
+        const id = (this.newModelId || '').trim();
+        if (!id) return;
+        if (!this.settings.customModels) this.settings.customModels = [];
+        if (this.settings.customModels.includes(id)) { this.toast('这个模型ID已经在列表里了', '🙃'); return; }
+        this.settings.customModels.push(id);
+        this.settings.model = id;
+        this.newModelId = '';
+        this.toast('已添加并切换到 ' + id, '🤖');
+      },
+      removeCustomModel(id) {
+        this.settings.customModels = this.settings.customModels.filter(m => m !== id);
+        if (this.settings.model === id) this.settings.model = 'deepseek-v4-flash';
+      },
 
       /* ---------- 提示 ---------- */
       toast(text, icon) {
@@ -214,9 +271,24 @@
       openStory(id) {
         this.story = this.stories.find(s => s.id === id);
         if (!this.story) return;
-        this.story.updatedAt = Date.now();
+        const st = this.story;
+        /* 旧数据字段补全 */
+        if (st.coreInstruction == null) st.coreInstruction = '';
+        if (st.useCoreInstruction == null) st.useCoreInstruction = false;
+        if (!st.phone) st.phone = {};
+        if (!st.phone.chats) st.phone.chats = {};
+        if (!st.phone.moments) st.phone.moments = [];
+        if (!st.phone.follows) st.phone.follows = {};
+        if (!st.phone.weibo) st.phone.weibo = {};
+        if (!Array.isArray(st.phone.weibo.hot)) st.phone.weibo.hot = [];
+        if (!Array.isArray(st.phone.weibo.posts)) st.phone.weibo.posts = [];
+        if (!Array.isArray(st.phone.weibo.supertopics)) st.phone.weibo.supertopics = [];
+        st.updatedAt = Date.now();
         this.tab = 'plot'; this.view = 'story';
-        this.phoneView = 'home'; this.wxNpc = null; this.mem.records = []; this.mem.hits = null; this.mem.query = '';
+        this.phoneView = 'home'; this.wxTab = 'chat'; this.wbTab = 'feed';
+        this.wxNpc = null; this.mem.records = []; this.mem.hits = null; this.mem.query = '';
+        this._auto = {};
+        this._phoneAutoDone = {};
         this.loadMemRecords();
         this.$nextTick(() => this.scrollBottom(true));
       },
@@ -325,7 +397,14 @@
       },
       affHeart(v) {
         const a = v == null ? 50 : v;
-        return a >= 75 ? '💗' : a >= 45 ? '💕' : a >= 20 ? '🤍' : '💔';
+        return a >= 75 ? '💗' : a >= 45 ? '💕' : a >= 15 ? '🤍' : a > -40 ? '💢' : '🖤';
+      },
+      affBarStyle(v) {
+        const a = v == null ? 50 : v;
+        if (a >= 0) {
+          return { left: '50%', width: (a / 2) + '%', background: 'linear-gradient(90deg,#f778ba,#e5484d)' };
+        }
+        return { right: '50%', left: (50 + a / 2) + '%', width: (-a / 2) + '%', background: 'linear-gradient(90deg,#5a3b8f,#b8323c)' };
       },
       npcManual() {
         this.drawer = { open: true, ctx: 'story', index: -1, isNew: true, form: { name: '', gender: '女', age: '', identity: '', personality: '', appearance: '', speech: '', relation: '', secret: '', greeting: '', affinity: 50, present: true, avatar: null } };
@@ -525,16 +604,23 @@
           if (/^[\[\{]/.test(t)) { blocks.push({ type: 'narr', text: t }); continue; } // JSON/标记行不当台词
           const m = t.match(sayRe);
           if (m) {
-            const nm = m[1].trim(); const rest = m[2];
-            if (this.npcByName(nm) || nm === pn || /^[\u201c"\u300c]/.test(rest)) {
-              lastSp = nm;
+            let nm = m[1].trim(); const rest = m[2];
+            /* "林晚冲你眨眨眼：" 这种带动作的说话前缀 → 归一到NPC名 */
+            let speaker = null;
+            if (this.npcByName(nm) || nm === pn) speaker = nm;
+            else {
+              const pref = (this.story ? this.story.npcs : []).find(n => n.name && nm.startsWith(n.name) && nm.length <= n.name.length + 6);
+              if (pref) speaker = pref.name;
+            }
+            if (speaker || /^[\u201c"\u300c]/.test(rest)) {
+              lastSp = speaker || nm;
               const qm = rest.match(/^([\u201c"\u300c][\s\S]*?[\u201d"\u300d])([\s\S]*)$/);
               if (qm) {
-                blocks.push({ type: 'say', name: nm, text: qm[1].slice(1, -1) });
+                blocks.push({ type: 'say', name: lastSp, text: qm[1].slice(1, -1) });
                 const tail = qm[2].trim();
                 if (tail) blocks.push({ type: 'narr', text: tail });
               } else {
-                blocks.push({ type: 'say', name: nm, text: rest.replace(/^[\u201c"\u300c]+|[\u201d"\u300d]+$/g, '') });
+                blocks.push({ type: 'say', name: lastSp, text: rest.replace(/^[\u201c"\u300c]+|[\u201d"\u300d]+$/g, '') });
               }
               continue;
             }
@@ -550,6 +636,25 @@
             }
             continue;
           }
+          /* 叙述中内嵌台词：扫描NPC名，"……沈砚：「台词」……" 拆为 旁白+台词(+尾巴) */
+          let npcHit = null;
+          for (const n of (this.story ? this.story.npcs : [])) {
+            if (!n.name) continue;
+            let i = t.indexOf(n.name + '：');
+            if (i < 0) i = t.indexOf(n.name + ':');
+            if (i < 0) continue;
+            const after = t.slice(i + n.name.length + 1);
+            const qm3 = after.match(/^[\s]*([\u201c\u300c"][^\u201d\u300d"]*[\u201d\u300d"])/);
+            if (qm3) { npcHit = { npc: n, pre: t.slice(0, i), quote: qm3[1], tail: after.slice(qm3[0].length) }; break; }
+          }
+          if (npcHit) {
+            const pre = npcHit.pre.trim();
+            if (pre) blocks.push({ type: 'narr', text: pre });
+            blocks.push({ type: 'say', name: npcHit.npc.name, text: npcHit.quote.slice(1, -1) });
+            const tail3 = npcHit.tail.trim();
+            if (tail3) blocks.push({ type: 'narr', text: tail3 });
+            continue;
+          }
           if (/^\u3010(\u5fae\u4fe1|\u670b\u53cb\u5708)/.test(t)) {
             blocks.push({ type: 'phonemark', text: t.indexOf('\u5fae\u4fe1') >= 0 ? '📱 微信消息已送达' : '📱 朋友圈已更新' });
             continue;
@@ -560,9 +665,112 @@
       },
       aiBlocks(m) {
         if (!this._aiCache.has(m.id)) {
-          this._aiCache.set(m.id, this.parseAiBlocks(m.text));
+          this._aiCache.set(m.id, this.parseStructured(m.text));
         }
         return this._aiCache.get(m.id);
+      },
+      /* ---- 结构化格式解析（9条格式 → 卡片；无标记时整体作为正文） ---- */
+      parseStructured(text) {
+        const sections = [];
+        let cur = null;
+        let mode = 'main';
+        const stripMd = s => s.replace(/[*_`]+/g, '');
+        const newSec = (type, sub) => { cur = { type, sub: sub || '', lines: [] }; sections.push(cur); return cur; };
+        for (const raw of (text || '').split('\n')) {
+          const l = raw.trim();
+          const s = stripMd(l);
+          if (!l) { if (cur) cur.lines.push(''); continue; }
+          if (/^[-—_=∙•]{4,}$/.test(s)) { continue; }
+          /* 正文切换（先于引用块检测，兼容 > **正文** 与 **正文**） */
+          if (/\*\*正文\*\*\s*$/.test(s) || /^正文\s*\**$/.test(s) || /【正文内容|【正文】/.test(s)) { mode = 'main'; cur = null; continue; }
+          /* 时间 */
+          if (/【时间】|时间流逝\s*[:：]/.test(s)) { newSec('time'); mode = 'meta'; cur.lines.push(l); continue; }
+          /* 在场人员（须先于场景检测，标记行也带[]） */
+          if (/【在场人员|在场角色人数|目前在场/.test(s)) { newSec('cast'); mode = 'cast'; continue; }
+          /* 场景 */
+          if (/【当前场景】/.test(s) || (mode === 'meta' && /^\[.+\]$/.test(s))) {
+            newSec('scene'); mode = 'meta'; cur.lines.push(l.replace(/^\*{0,3}|\*{0,3}$/g, '')); continue;
+          }
+          /* 好感度行 */
+          if (/^🔹/.test(s) || /好感度进度/.test(s)) {
+            if (!cur || cur.type !== 'aff') newSec('aff');
+            mode = 'aff';
+            if (!/好感度进度/.test(s)) cur.lines.push(l);
+            continue;
+          }
+          if (/^>/.test(l)) {
+            const inner = l.replace(/^>\s?/, '');
+            const si = stripMd(inner);
+            if (/^[-—_=∙•\s]{4,}$/.test(si)) { continue; }
+            if (si.replace(/\s/g, '') === '正文' || /【正文/.test(si)) { mode = 'main'; cur = null; continue; }
+            let sub = 'quote';
+            if (/环境详图|核心地标|主要建筑|功能设施|环境景观|人群活动|可互动点/.test(si)) sub = 'map';
+            else if (/日程|固定日程|待办与机会|世界动态|固定时间|搜刮|探查|防御|联络/.test(si)) sub = 'schedule';
+            else if (/已探索区域|情报更新/.test(si)) sub = 'explore';
+            if (!cur || cur.type !== 'quote' || cur.sub !== sub) newSec('quote', sub);
+            cur.lines.push(inner); continue;
+          }
+          /* 日程/探索（无 > 前缀的行也能归队） */
+          if (/【每日日程|固定日程|待办与机会|世界动态|【情报更新|已解锁新区域|【已探索区域|【搜刮|【探查|【防御|【联络/.test(s)) {
+            mode = 'quote';
+            const desired = /情报更新|已解锁|已探索/.test(s) ? 'explore' : 'schedule';
+            if (!cur || cur.type !== 'quote' || cur.sub !== desired) newSec('quote', desired);
+            cur.lines.push(l.replace(/^>\s?/, '')); continue;
+          }
+          if (/【旁白】|情节回溯|任务提示|系统自检/.test(s)) { newSec('aside'); mode = 'aside'; continue; }
+          if (/【心理活动|心理活动\s*[:：]/.test(s)) { newSec('psycho'); mode = 'psycho'; continue; }
+          if (mode === 'cast' && cur) { cur.lines.push(l); continue; }
+          if (mode === 'aff' && cur) { cur.lines.push(l); continue; }
+          if (mode === 'aside' && cur) { cur.lines.push(l); continue; }
+          if (mode === 'psycho' && cur) { cur.lines.push(l); continue; }
+          if (mode === 'quote' && cur && cur.type === 'quote') { cur.lines.push(l.replace(/^>\s?/, '')); continue; }
+          if (!cur || cur.type !== 'main') newSec('main');
+          mode = 'main'; cur.lines.push(l);
+        }
+        const out = sections
+          .filter(sec => sec.lines.some(x => x.trim()))
+          .map(sec => sec.type === 'main' ? { type: 'main', blocks: this.parseAiBlocks(sec.lines.join('\n')) } : sec);
+        return out.length ? out : [{ type: 'main', blocks: this.parseAiBlocks(text || '') }];
+      },
+      fmtText(sec) {
+        return sec.lines.map(x => x.replace(/[*`]+/g, '')).join('  ');
+      },
+      castLines(sec) {
+        return sec.lines.filter(l => l.trim() && !/^\[/.test(l.trim())).map(l => {
+          const m = l.replace(/^[*\s]+|[*\s]+$/g, '').match(/^([^：:]{1,12})[：:]\s*([\s\S]+)$/);
+          return m ? { name: m[1], desc: m[2] } : { name: '', desc: l };
+        });
+      },
+      affLines(sec) {
+        return sec.lines.filter(l => /好感度/.test(l)).map(l => {
+          const m = l.replace(/^[*\s🔹]+|[\s*]+$/g, '').match(/^([^：:]{1,12})[：:]\s*好感度\s*(-?\d+)\s*%?\s*(?:\||｜)?\s*(.*)$/);
+          if (!m) return null;
+          const rest = m[3] || '';
+          const st = rest.match(/状态\s*[:：]\s*([^|｜]*)/);
+          return { name: m[1], value: Math.max(-100, Math.min(100, parseInt(m[2], 10) || 0)), status: st ? st[1].trim() : '' };
+        }).filter(Boolean);
+      },
+      syncAffFromSection(sec) {
+        (this.affLines(sec) || []).forEach(a => {
+          const npc = this.npcByName(a.name);
+          if (npc && npc.affinity !== a.value) npc.affinity = a.value;
+        });
+      },
+      quoteParts(sec) {
+        const lines = sec.lines.filter(l => l.trim()).map(l => l.replace(/\*\*/g, '').trim());
+        let title = '';
+        const rest = [];
+        lines.forEach(l => {
+          if (!title) {
+            const m = l.match(/【([^】]+)】/);
+            if (m) { title = m[1]; rest.push(l.replace(/【[^】]*】/, '').trim()); return; }
+          }
+          rest.push(l);
+        });
+        if (!title) {
+          title = sec.sub === 'map' ? '当前区域环境详图' : sec.sub === 'schedule' ? '日程' : sec.sub === 'explore' ? '探索进度' : '详情';
+        }
+        return { title, lines: rest.filter(l => l.trim()) };
       },
       scrollBottom(force) {
         if (this.tab !== 'plot' && !force) return;
@@ -668,7 +876,9 @@
         const sc = this.stripChoices(phone.clean);
         const msg = { id: PW.Store.uid('m'), kind: 'ai', text: sc.text.trim(), raw, ts: Date.now(), choices: sc.choices, choicesUsed: false };
         story.chat.messages.push(msg);
-        this._aiCache.set(msg.id, this.parseAiBlocks(msg.text));
+        this._aiCache.set(msg.id, this.parseStructured(msg.text));
+        /* 同步9条格式中的好感度到NPC数据 */
+        this._aiCache.get(msg.id).forEach(sec => { if (sec.type === 'aff') this.syncAffFromSection(sec); });
         this.addMemories(story, [{ kind: 'ai', speaker: 'GM', text: raw.slice(0, 800) }]);
         this.routePhoneMarks(phone.marks);
         const fx = PW.Affinity.apply(story, { affs: parsed.affs, states: parsed.states });
@@ -902,6 +1112,32 @@
       /* ---------- 手机 ---------- */
       goPhone() { this.tab = 'phone'; this.phoneView = 'home'; },
       npcById(id) { return this.story ? this.story.npcs.find(n => n.id === id) : null; },
+      openWxApp() {
+        this.phoneView = 'wx'; this.wxTab = 'chat';
+        if (!this._auto.wx) { this._auto.wx = true; this.proactiveWx(true); }
+      },
+      openWbApp() {
+        this.phoneView = 'weibo'; this.wbTab = 'feed';
+        if (!this._auto.wb) { this._auto.wb = true; if (!this.story.phone.weibo.posts.length) this.refreshWeibo(true); }
+      },
+      ensureMoments() {
+        if (!this._auto.mo) { this._auto.mo = true; if (!this.story.phone.moments.length) this.refreshMoments(true); }
+      },
+      async proactiveWx(silent) {
+        if (this.wxProBusy || !this.settings.apiKey || !this.presentNpcs.length) return;
+        this.wxProBusy = true;
+        try {
+          const r = await PW.Phone.proactiveWechat(this.story);
+          this.toast('📱 ' + r.npc.name + '：' + ((r.msgs[0] && r.msgs[0].text) || '').slice(0, 18), '💬');
+        } catch (e) { if (!silent) this.showError(e); }
+        finally { this.wxProBusy = false; }
+      },
+      isFollowed(id) { return !!(this.story && this.story.phone.follows && this.story.phone.follows[id]); },
+      toggleFollow(id) {
+        const f = this.story.phone.follows;
+        if (f[id]) { delete f[id]; this.toast('已取消关注', '💔'); }
+        else { f[id] = true; this.toast('关注成功，TA的动态会优先出现', '💚'); }
+      },
       openWx(n) { this.wxNpc = n; this.phoneView = 'wxchat'; this.phoneInput = ''; this.$nextTick(() => this.scrollWx()); },
       wxList(n) { return (this.story.phone.chats[n.id] || []); },
       wxLastMsg(n) {
@@ -929,28 +1165,28 @@
         } catch (e) { this.showError(e); }
         finally { this.wxBusy = false; this.$nextTick(() => this.scrollWx()); }
       },
-      async refreshMoments() {
+      async refreshMoments(silent) {
         this.moBusy = true;
         try {
           const n = await PW.Phone.genMoments(this.story, 3);
-          this.toast(n.length ? `收到 ${n.length} 条新动态` : 'NPC 们暂时没发动态', '🌸');
-        } catch (e) { this.showError(e); }
+          if (!silent) this.toast(n.length ? `收到 ${n.length} 条新动态` : 'NPC 们暂时没发动态', '🌸');
+        } catch (e) { if (!silent) this.showError(e); }
         finally { this.moBusy = false; }
       },
       toggleLike(mo) { mo.likedByMe = !mo.likedByMe; mo.likes += mo.likedByMe ? 1 : -1; },
-      async sendCmt(mo) {
+      async sendCmt(target) {
         const text = this.cmtText.trim();
         if (!text || this.moBusy) return;
         this.cmtText = '';
         this.moBusy = true;
-        try { await PW.Phone.commentMoment(this.story, mo, text); }
+        try { await PW.Phone.commentOnPost(this.story, target, text); }
         catch (e) { this.showError(e); }
         finally { this.moBusy = false; }
       },
-      async refreshWeibo() {
+      async refreshWeibo(silent) {
         this.wbBusy = true;
-        try { await PW.Phone.genWeibo(this.story); this.toast('热搜已更新', '🔥'); }
-        catch (e) { this.showError(e); }
+        try { await PW.Phone.genWeibo(this.story); if (!silent) this.toast('热搜与微博已更新', '🔥'); }
+        catch (e) { if (!silent) this.showError(e); }
         finally { this.wbBusy = false; }
       },
 
