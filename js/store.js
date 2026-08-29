@@ -61,7 +61,8 @@ window.PW = window.PW || {};
       player: opt.player || { name: '我', gender: '', age: '', persona: '', avatar: null },
       npcs: opt.npcs || [],
       chat: { messages: [], summary: '', summarizedUntil: 0 },
-      phone: { chats: {}, moments: [], weibo: { posts: [], hot: [] } },
+      phone: { chats: {}, moments: [], groups: [], follows: {}, weibo: { posts: [], hot: [], supertopics: [] } },
+      useNineFormat: true,
       settings: {
         styleId: tpl ? tpl.styleId : 'delicate',
         pov: 'third',

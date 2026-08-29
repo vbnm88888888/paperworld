@@ -93,6 +93,10 @@
 .mo-comment-input { display: flex; gap: 8px; margin-top: 8px; }
 .mo-comment-input input { flex: 1; padding: 7px 11px; border-radius: 18px; border: 1.5px solid var(--line); background: var(--card); outline: none; font-size: 13px; }
 
+/* 微信群聊 */
+.grp-ava { background: linear-gradient(135deg, #7ba3e0, #5b8ac9); color: #fff !important; }
+.grp-name { font-size: 11px; color: var(--ink3); margin: 0 4px 2px; }
+
 /* 微博（饭圈生态） */
 .h-click { cursor: pointer; transition: background .12s; border-radius: 8px; }
 .h-click:active { background: var(--card2); }

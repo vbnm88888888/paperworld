@@ -201,5 +201,33 @@ window.PW = window.PW || {};
     return post;
   }
 
-  window.PW.Phone = { wechatSend, proactiveWechat, genMoments, genWeibo, commentOnPost, hotDetail, supertopicFeed };
+  /* ---------- 微信群聊 ---------- */
+  async function groupSend(story, group, text) {
+    const list = story.phone.chats[group.id] || (story.phone.chats[group.id] = []);
+    list.push({ id: PW.Store.uid('w'), role: 'me', text, ts: Date.now() });
+    const { content } = await PW.Api.chat({
+      messages: PW.Prompts.groupChatPrompt(story, group, text, list),
+      stream: false, temperature: 1.3
+    });
+    const replies = [];
+    (content || '').split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10).forEach(line => {
+      const m = line.match(/^([^：:]{1,10})[：:]\s*(.+)$/);
+      if (!m) return;
+      const npc = findNpc(story, m[1]);
+      if (!npc || !(group.memberIds || []).includes(npc.id)) return;
+      replies.push({
+        id: PW.Store.uid('w'), role: 'npc', name: npc.name, npcId: npc.id,
+        text: m[2].replace(/^[\u201c"]|[\u201d"]$/g, '').slice(0, 120), ts: Date.now()
+      });
+    });
+    list.push(...replies);
+    story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 微信群「${group.name}」：${text.length > 20 ? text.slice(0, 20) + '…' : text}`, ts: Date.now() });
+    await PW.App.addMemories(story, [
+      { kind: 'phone', speaker: story.player.name, text: `（微信群「${group.name}」里玩家说）${text}` },
+      { kind: 'phone', speaker: '群聊', text: `（群里回复）${replies.map(r => `${r.name}：${r.text}`).join(' / ')}` }
+    ]);
+    return { replies };
+  }
+
+  window.PW.Phone = { wechatSend, proactiveWechat, genMoments, genWeibo, commentOnPost, hotDetail, supertopicFeed, groupSend };
 })();

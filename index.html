@@ -283,6 +283,14 @@
               <div class="switch" :class="{on: story.settings.optionsOn}" @click="story.settings.optionsOn=!story.settings.optionsOn"></div>
             </div>
             <div class="set-row">
+              <div class="s-label"><b>九段式输出</b><span>每次回复强制生成9张卡片：时间/场景/地图/在场人员/正文/日程/探索/旁白/心理</span></div>
+              <div class="switch" :class="{on: story.useNineFormat}" @click="story.useNineFormat=!story.useNineFormat"></div>
+            </div>
+            <div class="set-row">
+              <div class="s-label"><b>饭圈生态</b><span>微博/朋友圈按娱乐圈饭圈口吻生成（唯粉/cpf/营销号）</span></div>
+              <div class="switch" :class="{on: story.settings.fandom}" @click="story.settings.fandom=!story.settings.fandom"></div>
+            </div>
+            <div class="set-row">
               <div class="s-label"><b>手机世界</b><span>微信/朋友圈/微博模拟</span></div>
               <div class="switch" :class="{on: story.settings.phoneEnabled}" @click="story.settings.phoneEnabled=!story.settings.phoneEnabled"></div>
             </div>
@@ -325,6 +333,8 @@
             <div class="mem-stat"><div class="v">{{ tokenTotal }}</div><div class="k">累计消耗(t)</div></div>
           </div>
 
+          <button class="btn danger block" style="margin-bottom:14px" @click="clearMemAll">🗑 清空本故事全部记忆</button>
+
           <div class="summary-card">
             <div class="s-head"><b>📜 前情提要（L2 自动摘要）</b>
               <button class="btn sm ghost" @click="mem.summaryEdit=!mem.summaryEdit">{{ mem.summaryEdit ? '完成' : '编辑' }}</button>
@@ -359,7 +369,6 @@
             还没有记忆。<br>每一段剧情都会自动存入这里，成为 AI 的长期记忆。
           </div>
 
-          <button class="btn danger block" style="margin-top:16px" @click="clearMemAll">清空本故事全部记忆</button>
         </div>
 
         <!-- ===== 手机 Tab ===== -->
@@ -385,6 +394,7 @@
                 <!-- 微信：聊天 + 朋友圈 -->
                 <template v-else-if="phoneView==='wx'">
                   <div class="app-head"><button class="back" @click="phoneView='home'">‹</button><b>微信</b>
+                    <button class="op" title="发起群聊" @click="openGroupModal" style="margin-right:4px">👥</button>
                     <button class="op" title="让NPC主动找你" @click="proactiveWx" :disabled="wxProBusy">{{ wxProBusy ? '⏳' : '📢' }}</button></div>
                   <div class="app-tabs">
                     <button :class="{on: wxTab==='chat'}" @click="wxTab='chat'">💬 聊天</button>
@@ -392,7 +402,14 @@
                   </div>
 
                   <div class="app-body" v-if="wxTab==='chat'">
-                    <div class="wx-empty" v-if="!presentNpcs.length">先在「角色」页添加角色，<br>再来这里和他们聊天。</div>
+                    <div class="wx-empty" v-if="!presentNpcs.length && !story.phone.groups.length">先在「角色」页添加角色，<br>再来这里和他们聊天。</div>
+                    <div class="wx-item" v-for="g in story.phone.groups" :key="g.id" @click="openGroup(g)">
+                      <div class="avatar grp-ava">👥</div>
+                      <div class="wx-info">
+                        <div class="r1"><b>{{ g.name }}</b><time>{{ groupLastTime(g) }}</time></div>
+                        <div class="r2">{{ groupLastMsg(g) }}</div>
+                      </div>
+                    </div>
                     <div class="wx-item" v-for="n in presentNpcs" :key="n.id" @click="openWx(n)">
                       <div class="avatar"><img v-if="avSrc(n)" :src="avSrc(n)" alt=""><template v-else>{{ avEmoji(n) }}</template></div>
                       <div class="wx-info">
@@ -401,7 +418,7 @@
                       </div>
                     </div>
                     <div style="text-align:center;font-size:11px;color:var(--ink3);padding:14px 0 4px">
-                      点右上角 📢，NPC 会主动给你发微信
+                      右上角 👥 发起群聊 · 📢 让NPC主动发消息
                     </div>
                   </div>
 
@@ -454,6 +471,37 @@
                   <div class="inputbar" style="border-top:1px solid var(--line)">
                     <textarea v-model="phoneInput" rows="1" placeholder="发微信…" @keydown="inputKeydown($event, 'phoneSend')"></textarea>
                     <button class="send" @click="phoneSend" :disabled="wxBusy">➤</button>
+                  </div>
+                </template>
+
+                <!-- 微信群聊 -->
+                <template v-else-if="phoneView==='groupchat' && wxGroup">
+                  <div class="app-head"><button class="back" @click="phoneView='wx'">‹</button><b>{{ wxGroup.name }}（{{ groupMembers(wxGroup).length }}人）</b><span class="op">👥</span></div>
+                  <div class="app-body wx-chat" ref="wxScroll">
+                    <div class="wx-time">群成员：{{ groupMembers(wxGroup).map(function(m){return m.name;}).join('、') }}</div>
+                    <div class="wx-msg" v-for="msg in groupMsgs(wxGroup)" :key="msg.id" :class="{mine: msg.role==='me'}">
+                      <template v-if="msg.role!=='me'">
+                        <div class="avatar">
+                          <img v-if="npcById(msg.npcId) && avSrc(npcById(msg.npcId))" :src="avSrc(npcById(msg.npcId))" alt="">
+                          <template v-else>👤</template>
+                        </div>
+                        <div>
+                          <div class="grp-name">{{ msg.name }}</div>
+                          <div class="wx-bubble">{{ msg.text }}</div>
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div class="wx-bubble">{{ msg.text }}</div>
+                      </template>
+                    </div>
+                    <div class="wx-msg" v-if="groupBusy">
+                      <div class="avatar grp-ava">👥</div>
+                      <div class="typing-dots"><i></i><i></i><i></i></div>
+                    </div>
+                  </div>
+                  <div class="inputbar" style="border-top:1px solid var(--line)">
+                    <textarea v-model="phoneInput" rows="1" placeholder="在群里说点什么…" @keydown="inputKeydown($event, 'groupSend')"></textarea>
+                    <button class="send" @click="sendGroupMsg" :disabled="groupBusy">➤</button>
                   </div>
                 </template>
 
@@ -919,6 +967,24 @@
         <button class="btn" style="flex:1" @click="confirmBox.open=false">取消</button>
         <button class="btn danger" style="flex:1" @click="confirmBox.fn(); confirmBox.open=false">确定</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 发起群聊 -->
+  <div class="mask" v-if="groupModal.open" @click.self="groupModal.open=false">
+    <div class="modal">
+      <button class="close-x" @click="groupModal.open=false">✕</button>
+      <h3>👥 发起群聊</h3>
+      <div class="field"><label>群名称</label><input class="inp" v-model="groupModal.name" placeholder="例如：12层求生小队"></div>
+      <div class="field"><label>选择群成员（点选）</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button class="btn sm" v-for="n in presentNpcs" :key="n.id"
+                  :class="{primary: groupModal.memberIds.includes(n.id)}"
+                  @click="toggleGroupMember(n.id)">{{ n.name }}</button>
+        </div>
+        <div style="font-size:11.5px;color:var(--ink3);margin-top:6px" v-if="!presentNpcs.length">还没有NPC，先去「角色」页添加</div>
+      </div>
+      <button class="btn primary block" @click="createGroup">✔ 创建群聊</button>
     </div>
   </div>
 

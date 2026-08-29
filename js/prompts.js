@@ -24,6 +24,11 @@ window.PW = window.PW || {};
         + '1. 用中文回复。\n'
         + '2. 绝不代替玩家角色做决定，绝不描写玩家角色未声明的行动与心理；其他角色只对玩家已声明的行为做出反应。\n'
         + '3. 若有角色好感或状态变化，可在回复末尾另起一行输出隐藏标记（系统自动剔除，玩家不可见，不要在正文解释）：[[AFF:NPC名:+3]] 或 [[AFF:NPC名:-2]]、[[STATE:NPC名:状态短语]]。\n';
+      if (story.useNineFormat) {
+        sys += '\n\n' + PW.NINE_FORMAT_SPEC;
+        sys += '\n\n【系统附加协议（最高优先级）】\n1. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。\n2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情到抉择点必须停下等待玩家输入。\n';
+        return sys;
+      }
       if (story.settings.optionsOn) {
         sys += '4. 如适合，可在最末尾给出2~4个简短行动建议，格式：[选项]\\n1. …\\n2. …（玩家可无视）。\n';
       }
@@ -79,6 +84,10 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     }
 
     /* 输出格式协议 */
+    if (story.useNineFormat) {
+      sys += '\\n\\n' + PW.NINE_FORMAT_SPEC;
+      sys += '\\n\\n【系统附加协议（最高优先级）】\\n1. 用中文。\\n2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情推进到需要玩家抉择时必须停下等待玩家输入。\\n3. 若有NPC好感或状态变化，在回复末尾输出隐藏标记：[[AFF:NPC名:+3]] / [[STATE:NPC名:状态短语]]（系统自动剔除，玩家不可见，不要在正文解释）。\\n4. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。';
+    } else {
     sys += `
 
 【输出格式（必须严格遵守）】
@@ -92,7 +101,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 7. 手机剧情（若启用）：NPC发消息、朋友圈动态、微博等用标记：【微信|NPC名|内容】【朋友圈|NPC名|动态内容】，系统会路由到手机界面。
 8. 保持NPC言行与其性格、身份、秘密一致；重要伏笔可以埋设，长线剧情要能接得上记忆。
 9. 好感度变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情因果，不可无脑上升；单次变化幅度不超过±10。`;
-
+    }
     return sys;
   }
 
@@ -194,6 +203,17 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     ];
   }
 
+  /* ---------- 手机：微信群聊 ---------- */
+  function groupChatPrompt(story, group, userText, recent) {
+    const members = (group.memberIds || []).map(id => (story.npcs || []).find(n => n.id === id)).filter(Boolean);
+    const cast = members.map(n => `${n.name}（${n.identity || ''}；性格：${(n.personality || '').slice(0, 30)}；说话风格：${(n.speech || '').slice(0, 20)}；好感度${n.affinity == null ? 50 : n.affinity}）`).join('\n');
+    const rec = (recent || []).slice(-10).map(m => `${m.name || (m.role === 'me' ? (story.player.name || '我') : '成员')}：${m.text}`).join('\n');
+    return [
+      { role: 'system', content: `【任务：群聊】你在微信群聊「${group.name}」中同时扮演以下所有NPC：\n${cast}\n要求：\n1. 挑选2~3位最可能开口的NPC回复，每人1~2条，其余人不说话；\n2. 每条一行，格式严格为：名字：内容\n3. 完全贴合各自性格与说话风格，可以互相接话、互怼、调侃、@某人；\n4. 口语化像真微信群聊，贴合当前剧情；不要旁白，不要引号。` },
+      { role: 'user', content: `最近的群聊记录：\n${rec || '（刚开始）'}\n\n玩家（${story.player.name || '我'}）刚在群里说：${userText}\n\n请输出各NPC的回复。` }
+    ];
+  }
+
   /* ---------- 手机：微信聊天 ---------- */
   function phoneChatMessages(story, npc, userText, chatHistory) {
     const recent = (chatHistory || []).slice(-8).map(m =>
@@ -206,8 +226,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 
   /* ---------- 手机：朋友圈（并入微信） ---------- */
   function momentsPrompt(story, n) {
-    const tpl = PW.TEMPLATES[story.genreKey];
-    const fandom = tpl && tpl.key === 'entertainment';
+    const fandom = !!story.settings.fandom;
     const cast = (story.npcs || []).filter(x => x.present !== false)
       .map(x => `${x.name}（${x.identity || ''}，性格：${(x.personality || '').slice(0, 30)}）`).join('；');
     const flavor = fandom
@@ -219,8 +238,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     ];
   }
   function weiboPrompt(story) {
-    const tpl = PW.TEMPLATES[story.genreKey];
-    const fandom = tpl && tpl.key === 'entertainment';
+    const fandom = !!story.settings.fandom;
     const artists = (story.npcs || []).filter(x => x.present !== false)
       .map(x => `${x.name}（${x.identity || ''}）`).join('；');
     const player = story.player.name || '玩家';
@@ -275,6 +293,6 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     gmSystem, historyMessages, build, summaryPrompt, rosterBlock,
     worldviewPrompt, polishPrompt, npcGenPrompt,
     proactiveChatPrompt, phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt, weiboReplyPrompt,
-    hotDetailPrompt, supertopicPrompt
+    hotDetailPrompt, supertopicPrompt, groupChatPrompt
   };
 })();

@@ -26,7 +26,7 @@
         showSettings: false,
         keyVisible: false,
         newModelId: '',
-        wizard: { open: false, step: 0, genreKey: 'modern', title: '', idea: '', worldview: '', rules: [], npcs: [], player: { name: '', gender: '女', age: '', persona: '', avatar: null }, genBusy: false },
+        wizard: { open: false, step: 0, genreKey: 'blank', title: '', idea: '', worldview: '', rules: [], npcs: [], player: { name: '', gender: '女', age: '', persona: '', avatar: null }, genBusy: false },
 
         /* NPC */
         drawer: { open: false, ctx: 'story', index: -1, isNew: true, form: {} },
@@ -51,6 +51,9 @@
         wbDetailKind: '',      // 'hot' | 'cha'
         wbDetailBusy: false,
         wbDetailPosts: [],
+        wxGroup: null,
+        groupBusy: false,
+        groupModal: { open: false, name: '', memberIds: [] },
         wxNpc: null,
         phoneInput: '',
         wxBusy: false, moBusy: false, wbBusy: false,
@@ -66,9 +69,7 @@
 
     computed: {
       genreList() {
-        const list = Object.keys(PW.TEMPLATES).map(k => ({ key: k, name: PW.TEMPLATES[k].name, emoji: PW.TEMPLATES[k].emoji }));
-        list.push({ key: 'blank', name: '自由自定', emoji: '📖' });
-        return list;
+        return [{ key: 'blank', name: '自由自定', emoji: '📖' }];
       },
       modelList() { return PW.CONFIG.MODELS; },
       allModels() {
@@ -157,7 +158,6 @@
     mounted() {
       PW.App = this;
       if (!this.settings.guideSeen) { this.guide.open = true; }
-      window.addEventListener('beforeunload', () => PW.Store.saveStories(this.stories));
     },
 
     methods: {
@@ -288,7 +288,10 @@
         if (!Array.isArray(st.phone.weibo.hot)) st.phone.weibo.hot = [];
         if (!Array.isArray(st.phone.weibo.posts)) st.phone.weibo.posts = [];
         if (!Array.isArray(st.phone.weibo.supertopics)) st.phone.weibo.supertopics = [];
+        if (!Array.isArray(st.phone.groups)) st.phone.groups = [];
         if (st.settings.styleNote == null) st.settings.styleNote = '';
+        if (st.useNineFormat == null) st.useNineFormat = false;
+        if (st.settings.fandom == null) st.settings.fandom = (st.genreKey === 'entertainment');
         st.updatedAt = Date.now();
         this.tab = 'plot'; this.view = 'story';
         this.phoneView = 'home'; this.wxTab = 'chat'; this.wbTab = 'feed';
@@ -794,7 +797,9 @@
         if (e.key === 'Enter' && !e.shiftKey) {
           if (e.isComposing || e.keyCode === 229) return;
           e.preventDefault();
-          if (which === 'phoneSend') this.phoneSend(); else this.send();
+          if (which === 'phoneSend') this.phoneSend();
+          else if (which === 'groupSend') this.sendGroupMsg();
+          else this.send();
         }
       },
 
@@ -1143,6 +1148,49 @@
         const f = this.story.phone.follows;
         if (f[id]) { delete f[id]; this.toast('已取消关注', '💔'); }
         else { f[id] = true; this.toast('关注成功，TA的动态会优先出现', '💚'); }
+      },
+
+      /* ---------- 微信群聊 ---------- */
+      groupMembers(g) {
+        return (g.memberIds || []).map(id => this.npcById(id)).filter(Boolean);
+      },
+      openGroupModal() {
+        this.groupModal = { open: true, name: '', memberIds: this.presentNpcs.slice(0, 2).map(n => n.id) };
+      },
+      toggleGroupMember(id) {
+        const arr = this.groupModal.memberIds;
+        const i = arr.indexOf(id);
+        if (i >= 0) arr.splice(i, 1); else arr.push(id);
+      },
+      createGroup() {
+        const name = (this.groupModal.name || '').trim() || (this.groupModal.memberIds.length + '人群');
+        if (this.groupModal.memberIds.length < 1) { this.toast('至少选1个成员', '🙃'); return; }
+        const g = { id: PW.Store.uid('grp'), name, memberIds: this.groupModal.memberIds.slice() };
+        this.story.phone.groups.push(g);
+        this.groupModal.open = false;
+        this.toast('群聊「' + name + '」已创建', '👥');
+      },
+      openGroup(g) { this.wxGroup = g; this.phoneView = 'groupchat'; this.phoneInput = ''; this.$nextTick(() => this.scrollWx()); },
+      groupMsgs(g) { return (this.story.phone.chats[g.id] || []); },
+      groupLastMsg(g) {
+        const l = this.groupMsgs(g);
+        const last = l[l.length - 1];
+        if (!last) return (this.groupMembers(g).map(m => m.name).join('、')) + '的群';
+        return (last.role === 'me' ? '我：' : (last.name || '') + '：') + last.text.slice(0, 20);
+      },
+      groupLastTime(g) {
+        const l = this.groupMsgs(g);
+        return l.length ? this.fmtClock(l[l.length - 1].ts) : '';
+      },
+      async sendGroupMsg() {
+        const text = this.phoneInput.trim();
+        if (!text || this.groupBusy || !this.wxGroup) return;
+        this.phoneInput = '';
+        this.groupBusy = true;
+        this.$nextTick(() => this.scrollWx());
+        try { await PW.Phone.groupSend(this.story, this.wxGroup, text); }
+        catch (e) { this.showError(e); }
+        finally { this.groupBusy = false; this.$nextTick(() => this.scrollWx()); }
       },
       openWx(n) { this.wxNpc = n; this.phoneView = 'wxchat'; this.phoneInput = ''; this.$nextTick(() => this.scrollWx()); },
       wxList(n) { return (this.story.phone.chats[n.id] || []); },
