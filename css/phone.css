@@ -73,7 +73,7 @@
   background: var(--bubble-npc); padding: 9px 12px; border-radius: 3px 14px 14px 14px;
   font-size: 14.5px; max-width: 66%; box-shadow: var(--shadow); line-height: 1.6; white-space: pre-wrap; word-break: break-word;
 }
-.wx-msg.mine { flex-direction: row-reverse; }
+.wx-msg.mine { justify-content: flex-end; }
 .wx-msg.mine .wx-bubble { background: #95ec69; color: #17301d; border-radius: 14px 3px 14px 14px; }
 [data-theme="dark"] .wx-msg.mine .wx-bubble { background: #3eb575; color: #fff; }
 .wx-time { text-align: center; font-size: 11px; color: var(--ink3); margin: 8px 0 12px; }
