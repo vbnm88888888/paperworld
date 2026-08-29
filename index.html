@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#4f8ef7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>纸上人间 · AI文字模拟游戏</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/shelf.css">
+  <link rel="stylesheet" href="css/story.css">
+  <link rel="stylesheet" href="css/npc.css">
+  <link rel="stylesheet" href="css/editor.css">
+  <link rel="stylesheet" href="css/phone.css">
+  <script src="js/vendor/vue.global.prod.js"></script>
+  <script>
+    /* vendor 缺失时回退 CDN */
+    if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
+  </script>
+</head>
+<body>
+<div id="app" v-cloak>
+
+  <!-- ==================== 书架页 ==================== -->
+  <div v-if="view==='shelf'" class="shelf">
+    <div class="topbar">
+      <div class="side"><button class="iconbtn" @click="showSettings=true" title="设置">⚙️</button></div>
+      <div class="title">纸上人间</div>
+      <div class="side right"><button class="iconbtn" @click="cycleTheme" title="切换深浅色">{{ themeEmoji }}</button></div>
+    </div>
+    <div class="shelf-hero">
+      <h1>我的书架</h1>
+      <p>每个故事都是一场可以反复改写的梦</p>
+    </div>
+
+    <div class="shelf-grid" v-if="stories.length">
+      <div class="story-card" v-for="st in sortedStories" :key="st.id" @click="openStory(st.id)">
+        <div class="cover" :style="{background:'linear-gradient(135deg,'+st.cover.c1+','+st.cover.c2+')'}">
+          <span class="genre-tag">{{ genreName(st) }}</span>
+          <button class="del" @click.stop="askDelStory(st)">✕</button>
+          {{ st.cover.emoji }}
+        </div>
+        <div class="meta">
+          <div class="t">{{ st.title }}</div>
+          <div class="d">{{ st.progressNote || '尚未开始，等待第一章……' }}</div>
+          <div class="time">🕙 {{ fmtRel(st.updatedAt) }}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="empty-shelf" v-else>
+      <div class="big">🕯️📖</div>
+      <h2>书架还是空的</h2>
+      <p>选一个题材，捏几个角色，<br>你的故事从第一行字开始。</p>
+      <button class="btn primary" @click="newWizard">✨ 开始第一个故事</button>
+    </div>
+
+    <button class="fab" @click="newWizard" title="新建故事">＋</button>
+  </div>
+
+  <!-- ==================== 故事页 ==================== -->
+  <div v-else-if="view==='story' && story" class="story-view" :style="skinStyle">
+    <div class="story-main-wrap">
+      <div class="topbar">
+        <div class="side"><button class="iconbtn" @click="backShelf">🏠</button></div>
+        <div class="title">{{ story.title }} <span class="chip gray" style="margin-left:4px">{{ genreName(story) }}</span></div>
+        <div class="side right">
+          <button class="iconbtn small" v-if="phoneEnabled" @click="goPhone" style="margin-right:6px">📱</button>
+          <button class="iconbtn" @click="storyMenu">⋯</button>
+        </div>
+      </div>
+
+      <div class="story-main" ref="mainScroll">
+        <!-- ===== 剧情 Tab ===== -->
+        <div v-if="tab==='plot'">
+          <div class="msg-list">
+            <div class="plot-empty" v-if="!story.chat.messages.length && !busy">
+              <div class="big">{{ story.cover.emoji }}</div>
+              <h2>{{ story.title }}</h2>
+              <p>{{ story.worldview.text ? story.worldview.text.slice(0, 60) + '……' : '自由世界，等你落笔' }}</p>
+              <button class="btn primary" @click="gmOpening" style="margin-top:16px">🎬 让 GM 开场</button>
+            </div>
+
+            <div class="msg" v-for="m in story.chat.messages" :key="m.id"
+                 @pointerdown="pressStart($event, m)" @pointerup="pressCancel" @pointercancel="pressCancel"
+                 @contextmenu.prevent="openMsgSheet(m)">
+              <!-- 玩家 -->
+              <template v-if="m.kind==='me'">
+                <div class="msg me"><div class="bubble">{{ m.text }}</div></div>
+              </template>
+              <!-- GM 回复 -->
+              <template v-else-if="m.kind==='ai'">
+                <template v-for="(b, bi) in aiBlocks(m)" :key="bi">
+                  <div v-if="b.type==='narr'" class="narr">{{ b.text }}</div>
+                  <div v-else-if="b.type==='say'" class="say">
+                    <div class="avatar">
+                      <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                      <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                    </div>
+                    <div class="body">
+                      <div class="name">{{ b.name }}</div>
+                      <div class="bubble">{{ b.text }}</div>
+                    </div>
+                  </div>
+                  <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                </template>
+                <div class="choices" v-if="m.choices && !m.choicesUsed">
+                  <button class="choice" v-for="(c, ci) in m.choices" :key="ci" @click="useChoice(m, ci)">
+                    <span class="no">{{ ci+1 }}</span>{{ c }}
+                  </button>
+                </div>
+              </template>
+              <!-- 指令 / OOC / 手机旁注 -->
+              <div v-else class="center">
+                <div class="pill" :class="{ooc: m.kind==='ooc', 'phone-pill': m.kind==='phone'}">
+                  {{ m.kind==='ooc' ? 'OOC · ' : m.kind==='phone' ? '' : '▸ ' }}{{ m.text }}
+                </div>
+              </div>
+
+              <div class="msg-tools" v-if="m.kind==='me' || m.kind==='ai'">
+                <button @click.stop="openMsgSheet(m)">⋯</button>
+              </div>
+            </div>
+
+            <!-- 流式输出中 -->
+            <div class="msg" v-if="busy">
+              <template v-if="streamText">
+                <template v-for="(b, bi) in streamBlocks" :key="'s'+bi">
+                  <div v-if="b.type==='narr'" class="narr">{{ b.text }}<span v-if="bi===streamBlocks.length-1" class="cursor-blink"></span></div>
+                  <div v-else-if="b.type==='say'" class="say">
+                    <div class="avatar">
+                      <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                      <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                    </div>
+                    <div class="body"><div class="name">{{ b.name }}</div>
+                      <div class="bubble">{{ b.text }}<span v-if="bi===streamBlocks.length-1" class="cursor-blink"></span></div>
+                    </div>
+                  </div>
+                  <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                </template>
+              </template>
+              <template v-else>
+                <div class="say"><div class="avatar"><img :src="gmAvatar" alt=""></div>
+                  <div class="typing-dots"><i></i><i></i><i></i></div>
+                </div>
+              </template>
+            </div>
+            <div style="height:6px"></div>
+          </div>
+        </div>
+
+        <!-- ===== NPC Tab ===== -->
+        <div v-else-if="tab==='npc'" class="npc-page">
+          <div class="npc-head">
+            <h2>角色 <span class="chip gray">{{ story.npcs.length }}</span></h2>
+            <span class="hint">在场者才会参与剧情</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <button class="btn sm" @click="npcManual" style="flex:1">➕ 手动添加</button>
+            <button class="btn sm" @click="npcLocal" style="flex:1">🎲 随机生成</button>
+            <button class="btn sm primary" @click="npcAiOpen" style="flex:1">✨ AI 生成</button>
+          </div>
+
+          <div class="npc-list" v-if="story.npcs.length">
+            <div class="npc-card" v-for="n in story.npcs" :key="n.id" @click="npcEdit(n)">
+              <div class="row1">
+                <div class="avatar">
+                  <img v-if="avSrc(n)" :src="avSrc(n)" alt="">
+                  <template v-else>{{ avEmoji(n) }}</template>
+                </div>
+                <div class="info">
+                  <b>{{ n.name }}</b> <span class="chip gray" style="font-size:10px">{{ n.gender }} · {{ n.age }}</span>
+                  <div class="id">{{ n.identity }}</div>
+                </div>
+              </div>
+              <div class="state-line" v-if="n.state">💫 {{ n.state }}</div>
+              <div class="tags">
+                <span class="chip" v-for="(t, ti) in npcTags(n)" :key="ti">{{ t }}</span>
+              </div>
+              <div class="aff-row">
+                <span class="heart">{{ affHeart(n.affinity) }}</span>
+                <div class="bar"><i :style="{width:(n.affinity||50)+'%'}"></i></div>
+                <span class="num">{{ n.affinity==null?50:n.affinity }}</span>
+              </div>
+              <div class="present-toggle" @click.stop="togglePresent(n)">
+                <div class="switch" :class="{on: n.present!==false}"></div>
+                {{ n.present!==false ? '在场 · 参与剧情' : '已离场' }}
+              </div>
+            </div>
+          </div>
+          <div class="plot-empty" v-else style="padding:50px 20px">
+            <div class="big">👥</div><h2>还没有角色</h2><p>手动捏人、骰子随机，或让 AI 生成一名与剧情契合的 NPC</p>
+          </div>
+        </div>
+
+        <!-- ===== 世界观 Tab ===== -->
+        <div v-else-if="tab==='world'" class="ed-page">
+          <div class="ed-head"><h2>🌍 世界观</h2><span class="hint">AI 与剧情都以此为纲</span></div>
+
+          <div class="set-group" style="margin-bottom:16px">
+            <div class="set-row">
+              <div class="s-label"><b>文风</b><span>GM 的笔触</span></div>
+              <select class="inp s-ctrl" style="width:auto" v-model="story.settings.styleId">
+                <option v-for="s in styleList" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
+            </div>
+            <div class="set-row">
+              <div class="s-label"><b>视角</b></div>
+              <div class="seg">
+                <button :class="{on: story.settings.pov==='third'}" @click="story.settings.pov='third'">第三人称</button>
+                <button :class="{on: story.settings.pov==='first'}" @click="story.settings.pov='first'">第一人称</button>
+              </div>
+            </div>
+            <div class="set-row">
+              <div class="s-label"><b>智能选项</b><span>AI 回复后附行动建议</span></div>
+              <div class="switch" :class="{on: story.settings.optionsOn}" @click="story.settings.optionsOn=!story.settings.optionsOn"></div>
+            </div>
+            <div class="set-row">
+              <div class="s-label"><b>手机世界</b><span>微信/朋友圈/微博模拟</span></div>
+              <div class="switch" :class="{on: story.settings.phoneEnabled}" @click="story.settings.phoneEnabled=!story.settings.phoneEnabled"></div>
+            </div>
+          </div>
+
+          <div class="sec-title">世界设定 <span class="line"></span>
+            <button class="btn sm" @click="aiWorld('polish')" :disabled="worldBusy">✨ 润色</button>
+            <button class="btn sm" @click="aiWorld('expand')" :disabled="worldBusy">📖 扩写</button>
+          </div>
+          <textarea class="inp world-text" v-model="story.worldview.text" placeholder="这个世界是什么样的？时代、地点、规则、暗流……"></textarea>
+          <div class="tok-est">≈ {{ worldTokens }} tokens</div>
+
+          <div class="sec-title">世界规则 <span class="line"></span>
+            <button class="btn sm" @click="addRule">＋ 加一条</button>
+          </div>
+          <div class="rule-item" v-for="(r, ri) in story.worldview.rules" :key="ri">
+            <input class="inp" v-model="story.worldview.rules[ri]" placeholder="例如：灵气复苏后，夜晚禁止飞行">
+            <button class="del" @click="story.worldview.rules.splice(ri,1)">🗑</button>
+          </div>
+          <button class="rule-add" @click="addRule">＋ 添加规则</button>
+        </div>
+
+        <!-- ===== 记忆 Tab ===== -->
+        <div v-else-if="tab==='memory'" class="ed-page">
+          <div class="ed-head"><h2>🧠 长期记忆</h2><span class="hint">RAG：只带相关的，不烧全量 token</span></div>
+
+          <div class="mem-stats">
+            <div class="mem-stat"><div class="v">{{ mem.records.length }}</div><div class="k">记忆条数</div></div>
+            <div class="mem-stat"><div class="v">{{ settings.memoryMode==='semantic' ? '语义' : '关键词' }}</div><div class="k">检索模式</div></div>
+            <div class="mem-stat"><div class="v">{{ lastCtxEst || '—' }}</div><div class="k">单次上下文(t)</div></div>
+            <div class="mem-stat"><div class="v">{{ tokenTotal }}</div><div class="k">累计消耗(t)</div></div>
+          </div>
+
+          <div class="summary-card">
+            <div class="s-head"><b>📜 前情提要（L2 自动摘要）</b>
+              <button class="btn sm ghost" @click="mem.summaryEdit=!mem.summaryEdit">{{ mem.summaryEdit ? '完成' : '编辑' }}</button>
+              <button class="btn sm ghost" @click="resummarize(true)" :disabled="mem.busy">重新压缩</button>
+            </div>
+            <textarea v-if="mem.summaryEdit" class="inp" v-model="story.chat.summary" style="min-height:120px" placeholder="暂无摘要（剧情变长后自动生成）"></textarea>
+            <div v-else class="s-body">{{ story.chat.summary || '暂无摘要——剧情每积累约36条消息，会自动把旧剧情压缩成前情提要。' }}</div>
+          </div>
+
+          <div class="sec-title">检索测试 <span class="line"></span></div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input class="inp" v-model="mem.query" placeholder="输入关键词，看 AI 会想起哪些记忆…" @keyup.enter="memSearch">
+            <button class="btn sm primary" @click="memSearch" :disabled="!mem.query">🔍</button>
+          </div>
+
+          <div class="sec-title">{{ mem.hits ? '检索命中' : '最近记忆' }} <span class="line"></span>
+            <button v-if="mem.hits" class="btn sm ghost" @click="mem.hits=null; mem.query=''">← 全部</button>
+            <button v-if="settings.memoryMode==='semantic'" class="btn sm" @click="reindexSemantic" :disabled="mem.reindexing">🔄 重建向量</button>
+          </div>
+          <div class="progress-line" v-if="mem.reindexing"><i :style="{width:mem.reindexPct+'%'}"></i></div>
+          <div style="font-size:12px;color:var(--ink3);margin-bottom:8px" v-if="mem.reindexing">正在为 {{ mem.records.length }} 条记忆生成向量… {{ mem.reindexPct }}%</div>
+
+          <div class="mem-item" v-for="r in (mem.hits || memRecent)" :key="r.id">
+            <div class="m-icon">{{ memIcon(r.kind) }}</div>
+            <div class="m-body">
+              <div class="m-meta">第{{ r.chapter || 1 }}节 · {{ memKindName(r.kind) }}{{ r.speaker ? ' · ' + r.speaker : '' }} · {{ fmtRel(r.ts) }}</div>
+              <div class="m-text">{{ r.text }}</div>
+            </div>
+            <button class="m-del" @click="delMem(r)">🗑</button>
+          </div>
+          <div class="wx-empty" v-if="!(mem.hits || mem.records.length)">
+            还没有记忆。<br>每一段剧情都会自动存入这里，成为 AI 的长期记忆。
+          </div>
+
+          <button class="btn danger block" style="margin-top:16px" @click="clearMemAll">清空本故事全部记忆</button>
+        </div>
+
+        <!-- ===== 手机 Tab ===== -->
+        <div v-else-if="tab==='phone'">
+          <div class="phone-stage">
+            <div class="phone">
+              <div class="p-status"><span>{{ clock }}</span><span>📶 5G 🔋{{ battery }}%</span></div>
+              <div class="p-screen">
+
+                <!-- 桌面 -->
+                <div class="p-home" v-if="phoneView==='home'">
+                  <div class="p-time">{{ clockShort }}</div>
+                  <div class="p-date">{{ dateStr }}</div>
+                  <div class="p-apps">
+                    <div class="p-app" @click="phoneView='wx'"><div class="icon wx">💬<span class="red-dot" v-if="wxUnread">{{ wxUnread }}</span></div><span>微信</span></div>
+                    <div class="p-app" @click="phoneView='weibo'"><div class="icon wb">热搜<span class="red-dot" v-if="!story.phone.weibo.hot.length">new</span></div><span>微博</span></div>
+                    <div class="p-app" @click="phoneView='moments'"><div class="icon camera">🌸</div><span>朋友圈</span></div>
+                    <div class="p-app" @click="phoneView='sms'"><div class="icon sms">✉️</div><span>短信</span></div>
+                  </div>
+                  <div style="position:absolute;bottom:16px;left:0;right:0;text-align:center;color:rgba(255,255,255,.55);font-size:11px">
+                    纸上人间 · {{ story.title }}
+                  </div>
+                </div>
+
+                <!-- 微信会话列表 -->
+                <template v-else-if="phoneView==='wx'">
+                  <div class="app-head"><button class="back" @click="phoneView='home'">‹</button><b>微信</b><span class="op"></span></div>
+                  <div class="app-body">
+                    <div class="wx-empty" v-if="!presentNpcs.length">先在「NPC」页添加角色，<br>再来这里和他们聊天。</div>
+                    <div class="wx-item" v-for="n in presentNpcs" :key="n.id" @click="openWx(n)">
+                      <div class="avatar"><img v-if="avSrc(n)" :src="avSrc(n)" alt=""><template v-else>{{ avEmoji(n) }}</template></div>
+                      <div class="wx-info">
+                        <div class="r1"><b>{{ n.name }}</b><time>{{ wxLastTime(n) }}</time></div>
+                        <div class="r2">{{ wxLastMsg(n) || '——' }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- 微信聊天 -->
+                <template v-else-if="phoneView==='wxchat' && wxNpc">
+                  <div class="app-head"><button class="back" @click="phoneView='wx'">‹</button><b>{{ wxNpc.name }}</b><span class="op">⋯</span></div>
+                  <div class="app-body wx-chat" ref="wxScroll">
+                    <div class="wx-time">{{ wxLastTime(wxNpc) || '聊天将同步进主线剧情' }}</div>
+                    <div class="wx-msg" v-for="msg in wxList(wxNpc)" :key="msg.id" :class="{mine: msg.role==='me'}">
+                      <div class="avatar" v-if="msg.role!=='me'">
+                        <img v-if="avSrc(wxNpc)" :src="avSrc(wxNpc)" alt=""><template v-else>{{ avEmoji(wxNpc) }}</template>
+                      </div>
+                      <div class="wx-bubble">{{ msg.text }}</div>
+                      <div class="avatar" v-if="msg.role==='me'">
+                        <img v-if="playerAvSrc" :src="playerAvSrc" alt=""><template v-else>{{ playerAvEmoji }}</template>
+                      </div>
+                    </div>
+                    <div class="wx-msg" v-if="wxBusy">
+                      <div class="avatar"><img v-if="avSrc(wxNpc)" :src="avSrc(wxNpc)" alt=""><template v-else>{{ avEmoji(wxNpc) }}</template></div>
+                      <div class="typing-dots"><i></i><i></i><i></i></div>
+                    </div>
+                  </div>
+                  <div class="inputbar" style="border-top:1px solid var(--line)">
+                    <textarea v-model="phoneInput" rows="1" placeholder="发微信…" @keydown="inputKeydown($event, 'phoneSend')"></textarea>
+                    <button class="send" @click="phoneSend" :disabled="wxBusy">➤</button>
+                  </div>
+                </template>
+
+                <!-- 朋友圈 -->
+                <template v-else-if="phoneView==='moments'">
+                  <div class="app-head"><button class="back" @click="phoneView='home'">‹</button><b>朋友圈</b>
+                    <button class="op" @click="refreshMoments" :disabled="moBusy">{{ moBusy ? '⏳' : '🔄' }}</button></div>
+                  <div class="app-body">
+                    <div class="wx-empty" v-if="!story.phone.moments.length && !moBusy">还没有动态。<br>点右上角 🔄，让 NPC 们发几条和剧情联动的朋友圈。</div>
+                    <div class="mo-item" v-for="mo in story.phone.moments" :key="mo.id">
+                      <div class="avatar">
+                        <img v-if="npcById(mo.npcId) && avSrc(npcById(mo.npcId))" :src="avSrc(npcById(mo.npcId))" alt="">
+                        <template v-else>{{ npcById(mo.npcId) ? avEmoji(npcById(mo.npcId)) : '🙂' }}</template>
+                      </div>
+                      <div class="mo-body">
+                        <b>{{ mo.name }}</b>
+                        <div class="mo-text">{{ mo.text }}</div>
+                        <div class="mo-foot">
+                          <time>{{ fmtRel(mo.ts) }}</time>
+                          <button :class="{on: mo.likedByMe}" @click="toggleLike(mo)">{{ mo.likedByMe ? '❤️' : '🤍' }} {{ mo.likes }}</button>
+                          <button @click="cmtFor = cmtFor===mo.id ? null : mo.id">💬 评论</button>
+                        </div>
+                        <div class="mo-comments" v-if="mo.comments.length">
+                          <div class="cmt" v-for="c in mo.comments" :key="c.id"><b>{{ c.name }}：</b>{{ c.text }}</div>
+                        </div>
+                        <div class="mo-comment-input" v-if="cmtFor===mo.id">
+                          <input v-model="cmtText" placeholder="评论一句…" @keyup.enter="sendCmt(mo)">
+                          <button class="btn sm primary" @click="sendCmt(mo)" :disabled="!cmtText">发送</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- 微博 -->
+                <template v-else-if="phoneView==='weibo'">
+                  <div class="app-head"><button class="back" @click="phoneView='home'">‹</button><b>微博</b>
+                    <button class="op" @click="refreshWeibo" :disabled="wbBusy">{{ wbBusy ? '⏳' : '🔄' }}</button></div>
+                  <div class="app-body">
+                    <div class="wb-hot" v-if="story.phone.weibo.hot.length">
+                      <div class="h-title">🔥 微博热搜</div>
+                      <div class="h-item" v-for="h in story.phone.weibo.hot" :key="h.rank">
+                        <span class="rk">{{ h.rank }}</span><span>{{ h.text }}</span><span class="heat">{{ h.heat }}</span>
+                      </div>
+                    </div>
+                    <div class="wx-empty" v-if="!story.phone.weibo.posts.length && !wbBusy">
+                      点右上角 🔄，生成热搜与 NPC 动态。
+                    </div>
+                    <div class="wb-post" v-for="p in story.phone.weibo.posts" :key="p.id">
+                      <div class="avatar">
+                        <img v-if="npcById(p.npcId) && avSrc(npcById(p.npcId))" :src="avSrc(npcById(p.npcId))" alt="">
+                        <template v-else>{{ npcById(p.npcId) ? avEmoji(npcById(p.npcId)) : '🙂' }}</template>
+                      </div>
+                      <div class="wb-body">
+                        <div class="r1"><b>{{ p.name }}</b><time>{{ fmtRel(p.ts) }}</time></div>
+                        <div class="wb-text">{{ p.text }}</div>
+                        <div class="wb-foot">
+                          <button :class="{on: p.likedByMe}" @click="p.likedByMe=!p.likedByMe; p.likes += p.likedByMe?1:-1">👍 {{ p.likes }}</button>
+                          <span>🔁 {{ p.reposts }}</span><span>💬 {{ p.commentsN }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <!-- 短信（小彩蛋） -->
+                <template v-else-if="phoneView==='sms'">
+                  <div class="app-head"><button class="back" @click="phoneView='home'">‹</button><b>短信</b><span class="op"></span></div>
+                  <div class="app-body">
+                    <div class="wx-time">今天</div>
+                    <div class="wx-msg">
+                      <div class="avatar" style="font-size:18px">📣</div>
+                      <div class="wx-bubble">【纸上人间】您正在《{{ story.title }}》的世界中冒险。回复任意内容不会有人理你，因为这里没有运营商。祝旅途愉快。</div>
+                    </div>
+                    <div class="wx-msg">
+                      <div class="avatar" style="font-size:18px">🧠</div>
+                      <div class="wx-bubble">小贴士：微信里说的话会同步进主线剧情，NPC 记得你说过的一切。</div>
+                    </div>
+                  </div>
+                </template>
+
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 剧情工具条 + 输入区 -->
+      <template v-if="tab==='plot'">
+        <div class="plot-tools">
+          <button class="tool" @click="reroll" :disabled="busy">↻ 重掷</button>
+          <button class="tool" @click="continuePlot" :disabled="busy">▶ 继续</button>
+          <button class="tool" @click="dice" :disabled="busy">🎲 随机事件</button>
+          <button class="tool" :class="{on: oocMode}" @click="oocMode=!oocMode" title="作者指令，不进入剧情">OOC</button>
+          <button class="tool" @click="snapshotOpen=true">💾 存档</button>
+        </div>
+        <div class="inputbar">
+          <textarea v-model="inputText" ref="inputBox" rows="1" :placeholder="oocMode ? 'OOC作者指令：如（让张三明天再出现）' : '你要做什么/说什么？'"
+            @keydown="inputKeydown($event, 'send')" @input="autoGrow"></textarea>
+          <button class="send" :class="{stop: busy}" @click="busy ? stopStream() : send()">{{ busy ? '■' : '➤' }}</button>
+        </div>
+      </template>
+    </div>
+
+    <!-- 底部/侧边 Tab -->
+    <div class="story-side">
+      <div class="tabbar">
+        <div class="tab" v-for="t in tabs" :key="t.id" :class="{on: tab===t.id}" @click="switchTab(t.id)">
+          <span class="em">{{ t.em }}</span>{{ t.name }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 弹层们 ==================== -->
+
+  <!-- 全局设置 -->
+  <div class="mask" v-if="showSettings" @click.self="showSettings=false">
+    <div class="modal">
+      <button class="close-x" @click="showSettings=false">✕</button>
+      <h3>⚙️ 设置</h3>
+      <div class="set-group">
+        <div class="set-row" style="flex-direction:column;align-items:stretch">
+          <div class="s-label" style="margin-bottom:6px"><b>DeepSeek API Key</b><span>仅保存在本机浏览器，不会上传</span></div>
+          <div style="display:flex;gap:8px">
+            <input class="inp key-inp" :type="keyVisible ? 'text' : 'password'" v-model="settings.apiKey" placeholder="sk-..." autocomplete="off">
+            <button class="btn sm" @click="keyVisible=!keyVisible">{{ keyVisible ? '🙈' : '👁' }}</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>接口地址</b><span>默认官方直连；被拦截可换 OpenAI 兼容中转</span></div>
+          <input class="inp s-ctrl" style="width:190px" v-model="settings.apiBase" placeholder="https://api.deepseek.com">
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>模型</b></div>
+          <select class="inp s-ctrl" style="width:auto" v-model="settings.model">
+            <option v-for="m in modelList" :key="m.id" :value="m.id">{{ m.name }}</option>
+          </select>
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>温度 {{ settings.temperature }}</b><span>越高越天马行空</span></div>
+          <input type="range" min="0.2" max="2" step="0.1" v-model.number="settings.temperature" style="width:130px">
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-row" style="flex-direction:column;align-items:stretch">
+          <div class="s-label" style="margin-bottom:8px"><b>记忆检索模式</b><span>语义模式首次需下载约95MB本地模型，之后离线可用</span></div>
+          <div class="seg">
+            <button :class="{on: settings.memoryMode==='bm25'}" @click="setMemoryMode('bm25')">关键词（零下载）</button>
+            <button :class="{on: settings.memoryMode==='semantic'}" @click="setMemoryMode('semantic')">语义增强</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>检索条数 {{ settings.topK }}</b><span>每次带入的相关记忆上限</span></div>
+          <input type="range" min="3" max="12" step="1" v-model.number="settings.topK" style="width:130px">
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>短期记忆 {{ settings.recentTurns }} 条</b><span>最近多少条消息保持原文</span></div>
+          <input type="range" min="6" max="40" step="2" v-model.number="settings.recentTurns" style="width:130px">
+        </div>
+      </div>
+
+      <div class="set-group">
+        <div class="set-row">
+          <div class="s-label"><b>外观</b></div>
+          <div class="seg">
+            <button :class="{on: settings.theme==='auto'}" @click="settings.theme='auto'">跟随</button>
+            <button :class="{on: settings.theme==='light'}" @click="settings.theme='light'">浅色</button>
+            <button :class="{on: settings.theme==='dark'}" @click="settings.theme='dark'">深色</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>导出全部备份</b><span>所有故事 + 设置（不含Key）</span></div>
+          <button class="btn sm" @click="exportAllData">导出</button>
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>导入备份</b><span>合并到书架，不覆盖现有</span></div>
+          <label class="btn sm" style="cursor:pointer">选择文件<input type="file" accept=".json" style="display:none" @change="importFile"></label>
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>清空所有数据</b><span>不可恢复，建议先导出</span></div>
+          <button class="btn sm danger" @click="askClearAll">清空</button>
+        </div>
+      </div>
+      <div style="font-size:11.5px;color:var(--ink3);text-align:center;margin-top:6px">
+        纸上人间 v1 · 纯前端离线可用 · DeepSeek API
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建向导 -->
+  <div class="mask" v-if="wizard.open" @click.self="wizard.open=false">
+    <div class="modal" style="width:min(94vw,560px)">
+      <button class="close-x" @click="wizard.open=false">✕</button>
+      <h3>✨ 新故事 <span style="font-size:12px;color:var(--ink3);font-weight:400">第 {{ wizard.step+1 }} / 4 步</span></h3>
+      <div class="wizard-steps"><div class="dot" v-for="i in 4" :key="i" :class="{on: wizard.step>=i-1}"></div></div>
+
+      <!-- 步骤1：题材 -->
+      <template v-if="wizard.step===0">
+        <div class="genre-grid">
+          <div class="genre-cell" v-for="g in genreList" :key="g.key" :class="{on: wizard.genreKey===g.key}" @click="pickGenre(g.key)">
+            <span class="em">{{ g.emoji }}</span>{{ g.name }}
+          </div>
+        </div>
+        <button class="btn primary block" @click="wizard.step=1">下一步 →</button>
+      </template>
+
+      <!-- 步骤2：世界观 -->
+      <template v-else-if="wizard.step===1">
+        <div class="field"><label>故事标题</label><input class="inp" v-model="wizard.title" placeholder="给这个故事起个名字"></div>
+        <div class="field">
+          <label>世界观 <button class="btn sm" style="margin-left:8px" @click="aiGenWorldview" :disabled="wizard.genBusy">{{ wizard.genBusy ? '生成中…' : '✨ AI 帮我写' }}</button></label>
+          <input class="inp" v-model="wizard.idea" style="margin-bottom:8px" placeholder="（可选）告诉AI你的想法：如'大女主复仇''末日甜宠'">
+          <textarea class="inp" style="min-height:150px" v-model="wizard.worldview" placeholder="这个世界是什么样的？"></textarea>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn" @click="wizard.step=0">← 上一步</button>
+          <button class="btn primary" style="flex:1" @click="wizard.step=2">下一步 →</button>
+        </div>
+      </template>
+
+      <!-- 步骤3：玩家 -->
+      <template v-else-if="wizard.step===2">
+        <div class="avatar-editor">
+          <div class="preview">
+            <img v-if="wizPlayerAv.img" :src="wizPlayerAv.img" alt="">
+            <template v-else>{{ wizPlayerAv.emoji || '🙂' }}</template>
+          </div>
+          <div class="ops">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn sm" @click="randAvatar(wizard.player)">🎲 换风格</button>
+              <label class="btn sm" style="cursor:pointer">📤 上传<input type="file" accept="image/*" style="display:none" @change="e=>onAvatarFile(e, wizard.player)"></label>
+            </div>
+            <div class="emoji-row" style="padding:2px 0">
+              <button v-for="em in emojiPoolFor(wizard.genreKey)" :key="em" @click="setAvatarEmoji(wizard.player, em)">{{ em }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>姓名</label><input class="inp" v-model="wizard.player.name" placeholder="你叫什么"></div>
+          <div class="field"><label>性别 / 年龄</label>
+            <div style="display:flex;gap:6px">
+              <select class="inp" v-model="wizard.player.gender" style="width:84px"><option>女</option><option>男</option><option>其他</option><option value="">保密</option></select>
+              <input class="inp" v-model="wizard.player.age" placeholder="年龄">
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>人设（性格、身份、目标……写得越细，AI 越懂你）</label>
+          <textarea class="inp" v-model="wizard.player.persona" placeholder="例如：刚失业的25岁社恐青年，嘴硬心软，攒钱想开一家猫咖"></textarea>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn" @click="wizard.step=1">← 上一步</button>
+          <button class="btn primary" style="flex:1" @click="wizard.step=3">下一步 →</button>
+        </div>
+      </template>
+
+      <!-- 步骤4：NPC -->
+      <template v-else>
+        <div class="wizard-npc-list" v-if="wizard.npcs.length">
+          <div class="wizard-npc-item" v-for="(n, ni) in wizard.npcs" :key="ni">
+            <div class="avatar" style="width:42px;height:42px">
+              <img v-if="avSrc(n)" :src="avSrc(n)" alt=""><template v-else>{{ avEmoji(n) }}</template>
+            </div>
+            <div class="info" @click="wizEditNpc(ni)"><b>{{ n.name }}</b><span>{{ n.identity }} · {{ (n.personality||'').slice(0,20) }}</span></div>
+            <button class="btn sm ghost" @click="wizDelNpc(ni)">移除</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <button class="btn sm" @click="wizAddNpcManual">➕ 手动添加</button>
+          <button class="btn sm" @click="wizAddNpcLocal">🎲 随机生成一个</button>
+        </div>
+        <p style="font-size:12.5px;color:var(--ink2);margin-bottom:12px">建议 2~3 个角色。之后随时可以在故事里增删、改人设。</p>
+        <div style="display:flex;gap:10px">
+          <button class="btn" @click="wizard.step=2">← 上一步</button>
+          <button class="btn primary" style="flex:1" @click="createStory">🎬 创建并开始</button>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- NPC 编辑抽屉 -->
+  <template v-if="drawer.open">
+    <div class="drawer-mask" @click="drawer.open=false"></div>
+    <div class="drawer">
+      <div class="d-head"><b>{{ drawer.isNew ? '➕ 新角色' : '✏️ 编辑角色' }}</b>
+        <button class="btn sm ghost" @click="drawer.open=false">完成</button></div>
+      <div class="d-body">
+        <div class="avatar-editor">
+          <div class="preview">
+            <img v-if="drawerAv.img" :src="drawerAv.img" alt="">
+            <template v-else>{{ drawerAv.emoji || '🙂' }}</template>
+          </div>
+          <div class="ops">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="btn sm" @click="randAvatar(drawer.form)">🎲 换风格</button>
+              <label class="btn sm" style="cursor:pointer">📤 上传<input type="file" accept="image/*" style="display:none" @change="e=>onAvatarFile(e, drawer.form)"></label>
+            </div>
+            <div class="emoji-row" style="padding:2px 0">
+              <button v-for="em in emojiPoolFor(drawerGenreKey)" :key="em" @click="setAvatarEmoji(drawer.form, em)">{{ em }}</button>
+            </div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>姓名 *</label><input class="inp" v-model="drawer.form.name"></div>
+          <div class="field"><label>性别 / 年龄</label>
+            <div style="display:flex;gap:6px">
+              <select class="inp" v-model="drawer.form.gender" style="width:80px"><option>女</option><option>男</option><option>其他</option><option value="">?</option></select>
+              <input class="inp" v-model="drawer.form.age" placeholder="年龄">
+            </div>
+          </div>
+        </div>
+        <div class="field"><label>身份</label><input class="inp" v-model="drawer.form.identity" placeholder="TA是谁？职业/地位/与玩家的关系"></div>
+        <div class="field"><label>性格</label><textarea class="inp" rows="2" v-model="drawer.form.personality" placeholder="表面怎么样，内里怎么样，在意什么……"></textarea></div>
+        <div class="field"><label>外貌</label><textarea class="inp" rows="2" v-model="drawer.form.appearance"></textarea></div>
+        <div class="field"><label>说话风格</label><input class="inp" v-model="drawer.form.speech" placeholder="如：毒舌但心软，句句带刺"></div>
+        <div class="field"><label>与玩家的初始关系</label><input class="inp" v-model="drawer.form.relation"></div>
+        <div class="field"><label>隐藏秘密（只有AI知道，需要剧情铺垫才会揭示）</label><textarea class="inp" rows="2" v-model="drawer.form.secret"></textarea></div>
+        <div class="field"><label>开场白</label><textarea class="inp" rows="2" v-model="drawer.form.greeting"></textarea></div>
+        <div class="row2">
+          <div class="field"><label>好感度：{{ drawer.form.affinity }}</label>
+            <input type="range" min="0" max="100" v-model.number="drawer.form.affinity" style="width:100%"></div>
+        </div>
+      </div>
+      <div class="d-foot">
+        <button class="btn danger" v-if="!drawer.isNew && drawer.ctx==='story'" @click="askDelNpc">删除</button>
+        <button class="btn primary" style="flex:1" @click="saveDrawer">保存</button>
+      </div>
+    </div>
+  </template>
+
+  <!-- AI NPC 预览 -->
+  <div class="mask" v-if="preview.open" @click.self="preview.open=false">
+    <div class="modal">
+      <button class="close-x" @click="preview.open=false">✕</button>
+      <h3>✨ AI 生成的角色</h3>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input class="inp" v-model="preview.hint" placeholder="（可选）期望方向：如'亦敌亦友的师姐'">
+        <button class="btn sm" @click="npcAiGen" :disabled="preview.busy">{{ preview.busy ? '⏳' : '重新生成' }}</button>
+      </div>
+      <template v-if="preview.data">
+        <div class="preview-card">
+          <div class="kv"><b>姓名</b><span>{{ preview.data.name }}（{{ preview.data.gender }}，{{ preview.data.age }}岁）</span></div>
+          <div class="kv"><b>身份</b><span>{{ preview.data.identity }}</span></div>
+          <div class="kv"><b>性格</b><span>{{ preview.data.personality }}</span></div>
+          <div class="kv"><b>外貌</b><span>{{ preview.data.appearance }}</span></div>
+          <div class="kv"><b>说话</b><span>{{ preview.data.speech }}</span></div>
+          <div class="kv"><b>关系</b><span>{{ preview.data.relation }}</span></div>
+          <div class="kv"><b>秘密</b><span style="color:var(--warn)">{{ preview.data.secret }}</span></div>
+          <div class="kv"><b>开场白</b><span>{{ preview.data.greeting }}</span></div>
+        </div>
+        <button class="btn primary block" @click="confirmPreviewNpc">✔ 就决定是 TA 了</button>
+      </template>
+      <div v-else class="pulse" style="text-align:center;padding:30px;color:var(--ink2)">正在构思角色……</div>
+    </div>
+  </div>
+
+  <!-- 消息操作 -->
+  <div class="sheet" v-if="sheet.open" @click.self="sheet.open=false">
+    <div class="panel">
+      <div class="grab"></div>
+      <div class="msg-preview" v-if="sheet.preview">{{ sheet.preview }}</div>
+      <button class="item" v-for="(it, ii) in sheet.items" :key="ii" :class="{danger: it.danger}" @click="it.fn(); sheet.open=false">
+        <span style="font-size:18px">{{ it.icon }}</span>{{ it.label }}
+      </button>
+      <button class="item" style="justify-content:center;color:var(--ink3)" @click="sheet.open=false">取消</button>
+    </div>
+  </div>
+
+  <!-- 编辑消息 -->
+  <div class="mask" v-if="msgEdit.open" @click.self="msgEdit.open=false">
+    <div class="modal">
+      <h3>✏️ 编辑消息</h3>
+      <textarea class="inp" style="min-height:140px" v-model="msgEdit.text"></textarea>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button class="btn" @click="msgEdit.open=false">取消</button>
+        <button class="btn primary" style="flex:1" @click="saveMsgEdit">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 存档 -->
+  <div class="mask" v-if="snapshotOpen" @click.self="snapshotOpen=false">
+    <div class="modal">
+      <button class="close-x" @click="snapshotOpen=false">✕</button>
+      <h3>💾 存档点</h3>
+      <button class="btn primary block" @click="makeSnap" style="margin-bottom:14px">📸 保存当前进度</button>
+      <div class="mem-item" v-for="s in story.snapshots" :key="s.id">
+        <div class="m-icon">💾</div>
+        <div class="m-body"><div class="m-meta">{{ fmtRel(s.ts) }}</div><div class="m-text">{{ s.label }}</div></div>
+        <button class="btn sm primary" @click="restoreSnap(s)">回溯</button>
+        <button class="m-del" @click="delSnap(s)">🗑</button>
+      </div>
+      <p style="font-size:12px;color:var(--ink3)" v-if="!story.snapshots.length">还没有存档。重大剧情前存一个，随时反悔。</p>
+    </div>
+  </div>
+
+  <!-- 确认框 -->
+  <div class="mask" v-if="confirmBox.open" @click.self="confirmBox.open=false">
+    <div class="modal" style="width:min(88vw,360px)">
+      <h3>{{ confirmBox.title }}</h3>
+      <p style="font-size:14px;color:var(--ink2);margin-bottom:16px">{{ confirmBox.text }}</p>
+      <div style="display:flex;gap:10px">
+        <button class="btn" style="flex:1" @click="confirmBox.open=false">取消</button>
+        <button class="btn danger" style="flex:1" @click="confirmBox.fn(); confirmBox.open=false">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新手引导 -->
+  <div class="mask" v-if="guide.open">
+    <div class="modal" style="text-align:center">
+      <template v-if="guide.step===0">
+        <div class="guide-emoji">📖✨</div>
+        <h3>欢迎来到纸上人间</h3>
+        <p class="guide-step">这是一场<b>由 AI 主持的文字模拟游戏</b>。<br>现代、宫斗、修仙、ABO、末日……<br>13 种题材任你开局，剧情由你主导。</p>
+      </template>
+      <template v-else-if="guide.step===1">
+        <div class="guide-emoji">🔑</div>
+        <h3>填入你的 DeepSeek Key</h3>
+        <p class="guide-step" style="text-align:left;margin-bottom:10px">
+          1. 打开 <b>platform.deepseek.com</b> 注册并创建 API Key<br>
+          2. 粘贴到下面（只存你自己的浏览器，绝不上传）</p>
+        <input class="inp" type="password" v-model="guide.key" placeholder="sk-..." autocomplete="off">
+      </template>
+      <template v-else>
+        <div class="guide-emoji">🎬</div>
+        <h3>开始你的第一个故事</h3>
+        <p class="guide-step">选题材 → 写世界观 → 捏角色 → 开玩！<br>玩得越久，AI 越懂这个世界——<br>它有属于每个故事的<b>长期记忆</b>。</p>
+      </template>
+      <div class="guide-dots"><i v-for="i in 3" :key="i" :class="{on: guide.step>=i-1}"></i></div>
+      <button class="btn primary block" @click="guideNext">{{ guide.step===2 ? '🚀 出发' : '下一步' }}</button>
+      <button class="btn ghost block" style="margin-top:6px" v-if="guide.step<2" @click="finishGuide">跳过</button>
+    </div>
+  </div>
+
+  <!-- Toast / 错误条 / 好感飘字 -->
+  <div class="toast" v-if="toastShow">{{ toastIcon }} {{ toastText }}</div>
+  <div class="errbar" v-if="err.show" @click="err.show=false">
+    <b>⚠️ {{ err.title }}</b>{{ err.detail }}
+  </div>
+  <div class="aff-fx" v-for="fx in affFxList" :key="fx.id" :style="fx.style">{{ fx.text }}</div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/templates.js"></script>
+<script src="js/store.js"></script>
+<script src="js/api.js"></script>
+<script src="js/rag.js"></script>
+<script src="js/prompts.js"></script>
+<script src="js/avatars.js"></script>
+<script src="js/affinity.js"></script>
+<script src="js/randomnpc.js"></script>
+<script src="js/phone.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

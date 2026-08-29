@@ -1,0 +1,101 @@
+/* ============ 手机模拟器（微信/朋友圈/微博） ============ */
+.phone-stage { display: flex; justify-content: center; padding: 14px 0 30px; }
+.phone {
+  width: min(94vw, 380px); height: min(78vh, 720px);
+  background: var(--card); border-radius: 34px;
+  box-shadow: 0 14px 44px rgba(0,0,0,.25), inset 0 0 0 2px rgba(120,130,150,.15);
+  overflow: hidden; display: flex; flex-direction: column; position: relative;
+}
+.phone .p-status {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 20px 4px; font-size: 11.5px; font-weight: 700; color: var(--ink);
+}
+.phone .p-screen { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+
+/* 桌面图标页 */
+.p-home { flex: 1; padding: 22px 18px; background: linear-gradient(160deg, #3a4a6b, #6b7fae); position: relative; overflow: hidden; }
+[data-theme="dark"] .p-home { background: linear-gradient(160deg, #1c2438, #2c3a58); }
+.p-home::after { content: ''; position: absolute; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,.08); top: -60px; right: -60px; }
+.p-time { color: #fff; text-align: center; font-size: 44px; font-weight: 200; letter-spacing: 2px; margin: 8px 0 2px; }
+.p-date { color: rgba(255,255,255,.8); text-align: center; font-size: 12.5px; margin-bottom: 26px; }
+.p-apps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px 8px; }
+.p-app { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.p-app .icon {
+  width: 54px; height: 54px; border-radius: 15px; display: flex; align-items: center; justify-content: center;
+  font-size: 27px; color: #fff; box-shadow: 0 6px 16px rgba(0,0,0,.22); transition: transform .12s; position: relative;
+}
+.p-app:active .icon { transform: scale(.9); }
+.p-app .icon.wx { background: linear-gradient(135deg, #2aae67, #22a04f); }
+.p-app .icon.wb { background: linear-gradient(135deg, #e6552e, #d43c17); }
+.p-app .icon.sms { background: linear-gradient(135deg, #4f8ef7, #38c6d9); }
+.p-app .icon.camera { background: linear-gradient(135deg, #f7b84f, #f78fb0); }
+.p-app span { font-size: 11px; color: rgba(255,255,255,.9); }
+.p-app .red-dot { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b30; color: #fff; font-size: 10.5px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid rgba(255,255,255,.25); }
+
+/* App 通用头部 */
+.app-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; background: var(--card2); border-bottom: 1px solid var(--line);
+}
+.app-head .back { font-size: 20px; width: 30px; }
+.app-head b { flex: 1; text-align: center; font-size: 15.5px; }
+.app-head .op { font-size: 16px; width: 30px; text-align: right; }
+.app-body { flex: 1; overflow-y: auto; padding: 12px; }
+
+/* 微信会话列表 */
+.wx-item { display: flex; gap: 11px; padding: 11px 8px; border-radius: 12px; align-items: center; cursor: pointer; }
+.wx-item:active { background: var(--card2); }
+.wx-item .avatar { width: 46px; height: 46px; font-size: 22px; }
+.wx-item .wx-info { flex: 1; min-width: 0; border-bottom: 1px solid var(--line); padding-bottom: 11px; }
+.wx-item .wx-info .r1 { display: flex; }
+.wx-item .wx-info .r1 b { flex: 1; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wx-item .wx-info .r1 time { font-size: 11px; color: var(--ink3); }
+.wx-item .wx-info .r2 { font-size: 12.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 2px; }
+.wx-empty { text-align: center; color: var(--ink2); padding: 60px 20px; font-size: 13.5px; line-height: 2; }
+
+/* 微信聊天 */
+.wx-chat { display: flex; flex-direction: column; }
+.wx-msg { display: flex; gap: 9px; margin-bottom: 13px; align-items: flex-start; }
+.wx-msg .avatar { width: 38px; height: 38px; }
+.wx-msg .wx-bubble {
+  background: var(--bubble-npc); padding: 9px 12px; border-radius: 3px 14px 14px 14px;
+  font-size: 14.5px; max-width: 66%; box-shadow: var(--shadow); line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+}
+.wx-msg.mine { flex-direction: row-reverse; }
+.wx-msg.mine .wx-bubble { background: #95ec69; color: #17301d; border-radius: 14px 3px 14px 14px; }
+[data-theme="dark"] .wx-msg.mine .wx-bubble { background: #3eb575; color: #fff; }
+.wx-time { text-align: center; font-size: 11px; color: var(--ink3); margin: 8px 0 12px; }
+
+/* 朋友圈 */
+.mo-item { display: flex; gap: 10px; padding: 13px 4px; border-bottom: 1px solid var(--line); }
+.mo-item .avatar { width: 42px; height: 42px; font-size: 20px; }
+.mo-item .mo-body { flex: 1; min-width: 0; }
+.mo-item .mo-body b { font-size: 14.5px; color: #5b6f94; }
+.mo-item .mo-text { font-size: 14.5px; margin: 3px 0 6px; line-height: 1.65; word-break: break-word; }
+.mo-item .mo-foot { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--ink3); }
+.mo-item .mo-foot button { font-size: 12px; color: var(--ink3); display: flex; align-items: center; gap: 3px; }
+.mo-item .mo-foot button.on { color: #e5484d; }
+.mo-comments { background: var(--card2); border-radius: 9px; padding: 8px 10px; margin-top: 8px; }
+.mo-comments .cmt { font-size: 12.5px; line-height: 1.7; }
+.mo-comments .cmt b { color: #5b6f94; font-weight: 600; }
+.mo-comment-input { display: flex; gap: 8px; margin-top: 8px; }
+.mo-comment-input input { flex: 1; padding: 7px 11px; border-radius: 18px; border: 1.5px solid var(--line); background: var(--card); outline: none; font-size: 13px; }
+
+/* 微博 */
+.wb-hot { background: var(--card); border-radius: 14px; padding: 10px 14px; box-shadow: var(--shadow); margin-bottom: 14px; }
+.wb-hot .h-title { font-size: 14px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.wb-hot .h-item { display: flex; align-items: center; gap: 9px; padding: 6px 0; font-size: 13.5px; border-bottom: 1px dashed var(--line); }
+.wb-hot .h-item:last-child { border-bottom: none; }
+.wb-hot .h-item .rk { width: 18px; font-weight: 800; font-style: italic; color: var(--ink3); font-size: 12px; }
+.wb-hot .h-item:nth-child(2) .rk, .wb-hot .h-item:nth-child(3) .rk, .wb-hot .h-item:nth-child(4) .rk { color: #e5484d; }
+.wb-hot .h-item .heat { margin-left: auto; font-size: 11px; color: var(--ink3); }
+.wb-post { display: flex; gap: 10px; padding: 13px 4px; border-bottom: 1px solid var(--line); }
+.wb-post .avatar { width: 42px; height: 42px; font-size: 20px; border-radius: 50%; }
+.wb-post .wb-body { flex: 1; min-width: 0; }
+.wb-post .wb-body .r1 { display: flex; align-items: center; gap: 6px; }
+.wb-post .wb-body .r1 b { font-size: 14px; color: #d2691e; }
+.wb-post .wb-body .r1 time { font-size: 11px; color: var(--ink3); }
+.wb-post .wb-text { font-size: 14.5px; margin: 4px 0 8px; line-height: 1.65; word-break: break-word; }
+.wb-post .wb-foot { display: flex; gap: 22px; font-size: 12px; color: var(--ink3); }
+.wb-post .wb-foot button { font-size: 12px; color: var(--ink3); display: flex; gap: 3px; align-items: center; }
+.wb-post .wb-foot button.on { color: #e6552e; }
