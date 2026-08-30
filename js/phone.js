@@ -73,7 +73,7 @@ window.PW = window.PW || {};
   /* ---------- 朋友圈（微信内） ---------- */
   async function genMoments(story, n) {
     /* 刷新即清掉玩家自己的旧帖子（按用户习惯：刷新=看新内容） */
-    story.phone.moments = story.phone.moments.filter(m => !m.mine);
+    story.phone.moments = [];
     const memText = await memFor('朋友圈 动态 ' + (story.chat.summary || '').slice(0, 80), ['moments']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPrompt(story, n, memText), stream: false, temperature: 1.4 });
     let arr;
@@ -104,6 +104,11 @@ window.PW = window.PW || {};
     return created;
   }
 
+  /* 朋友圈硬上限：界面只保留最近30条（内容早已写入共享记忆，不丢失） */
+  function trimMoments(story) {
+    if (story.phone.moments.length > 30) story.phone.moments.length = 30;
+  }
+
   /* ---------- 朋友圈：玩家发帖（NPC来评论） ---------- */
   async function playerMomentPost(story, text) {
     const mo = {
@@ -111,6 +116,7 @@ window.PW = window.PW || {};
       text: String(text).slice(0, 200), ts: Date.now(), likes: 0, likedByMe: false, comments: []
     };
     story.phone.moments.unshift(mo);
+    trimMoments(story);
     const memText = await memFor('朋友圈 ' + text, ['moments']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPlayerPostPrompt(story, text, memText), stream: false, temperature: 1.2 });
     let t = (content || '').trim();
@@ -196,7 +202,9 @@ window.PW = window.PW || {};
     });
 
     story.phone.weibo.hot = hot;
-    story.phone.weibo.posts = posts.concat(story.phone.weibo.posts.filter(p => !posts.some(x => x.text === p.text))).slice(0, 24);
+    /* 微博刷新：清掉玩家自己的旧帖和旧评论（用户内容只能用户自己发），新帖置顶 */
+    const old = story.phone.weibo.posts.filter(p => !p.mine && !posts.some(x => x.text === p.text));
+    story.phone.weibo.posts = posts.concat(old).slice(0, 24);
     story.phone.weibo.supertopics = supertopics;
     /* 微博内容入库共享记忆：热搜+帖子摘要（四端互通，剧情/微信可引用舆论动向） */
     if (posts.length || hot.length) {
@@ -269,8 +277,8 @@ window.PW = window.PW || {};
     post.commentsN = (post.commentsN || post.comments.length) + 0;
     const scope = post.authorType != null ? 'weibo' : 'moments';
     await PW.App.addMemories(story, [{ kind: 'phone', scope, speaker: story.player.name, text: `（${scope === 'weibo' ? '微博评论' : '朋友圈评论'}：玩家在${post.name}的帖子下说）${text}` }]);
-    if (post.authorType !== 'npc' || !post.npcId) return null;
-    const npc = (story.npcs || []).find(x => x.id === post.npcId);
+    /* 帖主回应：朋友圈按 npcId 找帖主（玩家自己的帖子 npcId 为空，无人回应）；微博同理 */
+    const npc = post.npcId ? (story.npcs || []).find(x => x.id === post.npcId) : null;
     if (!npc) return null;
     const { content } = await PW.Api.chat({ messages: PW.Prompts.weiboReplyPrompt(story, npc, post.text, text), stream: false, temperature: 1.2 });
     const reply = { id: PW.Store.uid('c'), name: npc.name + '（本尊）', text: (content || '').trim().slice(0, 80).replace(/^["“]|["”]$/g, '') };
