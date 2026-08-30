@@ -5,13 +5,24 @@ window.PW = window.PW || {};
     return (story.npcs || []).find(x => x.name === name) || null;
   }
 
+  /* 从共享记忆池检索相关剧情（四场景记忆互通） */
+  async function memFor(query) {
+    if (!query || !PW.App || !PW.App.retrieveMemories) return '';
+    try {
+      const hits = await PW.App.retrieveMemories(query);
+      if (!hits || !hits.length) return '';
+      return hits.map(h => '· [' + (h.label || '记忆') + '] ' + String(h.rec.text || '').slice(0, 110)).join(' ｜ ');
+    } catch (e) { return ''; }
+  }
+
   /* ---------- 微信：玩家主动发 ---------- */
   async function wechatSend(story, npc, text) {
     const chats = story.phone.chats;
     const list = chats[npc.id] || (chats[npc.id] = []);
     list.push({ id: PW.Store.uid('w'), role: 'me', text, ts: Date.now() });
+    const memText = await memFor(npc.name + ' ' + text);
     const { content } = await PW.Api.chat({
-      messages: PW.Prompts.phoneChatMessages(story, npc, text, list),
+      messages: PW.Prompts.phoneChatMessages(story, npc, text, list, memText),
       stream: false, temperature: 1.2
     });
     const lines = (content || '').split('\n').map(s => s.trim()).filter(s => s && !s.startsWith('['));
@@ -30,8 +41,9 @@ window.PW = window.PW || {};
 
   /* ---------- 微信：NPC主动发消息 ---------- */
   async function proactiveWechat(story) {
+    const memText = await memFor('微信 主动联系 ' + (story.chat.summary || '').slice(0, 80));
     const { content } = await PW.Api.chat({
-      messages: PW.Prompts.proactiveChatPrompt(story),
+      messages: PW.Prompts.proactiveChatPrompt(story, memText),
       stream: false, temperature: 1.3
     });
     let text = (content || '').trim();
@@ -54,7 +66,8 @@ window.PW = window.PW || {};
 
   /* ---------- 朋友圈（微信内） ---------- */
   async function genMoments(story, n) {
-    const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPrompt(story, n), stream: false, temperature: 1.4 });
+    const memText = await memFor('朋友圈 动态 ' + (story.chat.summary || '').slice(0, 80));
+    const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPrompt(story, n, memText), stream: false, temperature: 1.4 });
     let text = (content || '').trim();
     const m = text.match(/\[[\s\S]*\]/);
     if (m) text = m[0];
@@ -85,7 +98,8 @@ window.PW = window.PW || {};
 
   /* ---------- 微博（饭圈生态） ---------- */
   async function genWeibo(story) {
-    const { content } = await PW.Api.chat({ messages: PW.Prompts.weiboPrompt(story), stream: false, temperature: 1.4 });
+    const memText = await memFor('微博 热搜 舆论 ' + (story.chat.summary || '').slice(0, 80));
+    const { content } = await PW.Api.chat({ messages: PW.Prompts.weiboPrompt(story, memText), stream: false, temperature: 1.4 });
     let text = (content || '').trim();
     const m = text.match(/\{[\s\S]*\}/);
     if (m) text = m[0];
@@ -153,7 +167,8 @@ window.PW = window.PW || {};
 
   /* ---------- 微博：热搜词条详情 ---------- */
   async function hotDetail(story, hotText) {
-    const { content } = await PW.Api.chat({ messages: PW.Prompts.hotDetailPrompt(story, hotText), stream: false, temperature: 1.4 });
+    const memText = await memFor(hotText);
+    const { content } = await PW.Api.chat({ messages: PW.Prompts.hotDetailPrompt(story, hotText, memText), stream: false, temperature: 1.4 });
     let text = (content || '').trim();
     const m = text.match(/\[[\s\S]*\]/);
     if (m) text = m[0];
@@ -164,7 +179,8 @@ window.PW = window.PW || {};
 
   /* ---------- 微博：超话帖子流 ---------- */
   async function supertopicFeed(story, cha) {
-    const { content } = await PW.Api.chat({ messages: PW.Prompts.supertopicPrompt(story, cha), stream: false, temperature: 1.4 });
+    const memText = await memFor('超话 ' + cha.name + ' ' + (story.chat.summary || '').slice(0, 60));
+    const { content } = await PW.Api.chat({ messages: PW.Prompts.supertopicPrompt(story, cha, memText), stream: false, temperature: 1.4 });
     let text = (content || '').trim();
     const m = text.match(/\[[\s\S]*\]/);
     if (m) text = m[0];
@@ -205,8 +221,9 @@ window.PW = window.PW || {};
   async function groupSend(story, group, text) {
     const list = story.phone.chats[group.id] || (story.phone.chats[group.id] = []);
     list.push({ id: PW.Store.uid('w'), role: 'me', text, ts: Date.now() });
+    const memText = await memFor('群聊 ' + group.name + ' ' + text);
     const { content } = await PW.Api.chat({
-      messages: PW.Prompts.groupChatPrompt(story, group, text, list),
+      messages: PW.Prompts.groupChatPrompt(story, group, text, list, memText),
       stream: false, temperature: 1.3
     });
     const replies = [];

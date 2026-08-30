@@ -15,7 +15,9 @@
   border-left: 3px solid var(--acc);
   word-break: break-word;
 }
-.msg .narr::before { content: '📜 '; }
+.msg .narr .narr-icon { margin-right: 6px; }
+.msg .narr b { color: var(--ink); }
+.msg .say .bubble b { color: inherit; }
 
 .msg .say { display: flex; gap: 9px; margin-top: 12px; align-items: flex-start; }
 .msg .say .avatar { width: 38px; height: 38px; }

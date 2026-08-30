@@ -54,6 +54,7 @@
         wxGroup: null,
         groupBusy: false,
         groupModal: { open: false, name: '', memberIds: [] },
+        nineOpen: {},
         wxNpc: null,
         phoneInput: '',
         wxBusy: false, moBusy: false, wbBusy: false,
@@ -72,6 +73,7 @@
         return [{ key: 'blank', name: '自由自定', emoji: '📖' }];
       },
       modelList() { return PW.CONFIG.MODELS; },
+      nineParts() { return PW.NINE_PARTS; },
       allModels() {
         const custom = (this.settings.customModels || []).map(id => ({ id, name: id + ' · 自定义' }));
         return PW.CONFIG.MODELS.concat(custom);
@@ -234,6 +236,41 @@
         this.settings.lastErr = this.err.title + '：' + this.err.detail;
         setTimeout(() => { this.err.show = false; }, 6000);
       },
+      /* ---------- 轻量Markdown渲染（安全：先转义再生成标签） ---------- */
+      md(text) {
+        let t = String(text == null ? '' : text);
+        t = t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        t = t.replace(/\*\*\*([^*]+)\*\*\*/g, '<b><i>$1</i></b>');
+        t = t.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+        t = t.replace(/\*([^*\n]+)\*/g, '<i>$1</i>');
+        t = t.replace(/~~([^~]+)~~/g, '<s>$1</s>');
+        return t;
+      },
+      /* ---------- 剧情图标动态化 ---------- */
+      iconFor(text, fallback) {
+        const t = String(text || '');
+        const MAP = [
+          [/尸|丧尸|行尸|尸潮/, '🧟'], [/夜|深夜|黑暗|凌晨|月光/, '🌙'], [/雨|暴雨|雷|阴天/, '🌧'],
+          [/战斗|攻击|枪|刀|打斗|子弹|厮杀/, '⚔️'], [/医院|医疗|救治|药|伤口/, '🏥'], [/学校|校园|教室|课堂/, '🏫'],
+          [/车|开车|公路|驾车/, '🚗'], [/店|超市|便利店|商场|市场/, '🏪'], [/森林|树林|山|野外|丛林/, '🌲'],
+          [/火|燃烧|爆炸|起火/, '🔥'], [/河|海|湖|水/, '🌊'], [/公寓|房间|大楼|家|卧室|客厅/, '🏢'],
+          [/吃|饭|食物|罐头|厨房/, '🍽'], [/搜刮|物资|补给/, '📦'], [/广播|通讯|电台|对讲/, '📻'],
+          [/死|血|尸体|白骨/, '💀'], [/心动|亲密|吻|拥抱|恋爱/, '💗'], [/电脑|手机|信号|网络/, '📡'],
+          [/狗|猫|宠物|动物/, '🐾'], [/门|走廊|楼梯|地下室/, '🚪']
+        ];
+        for (const pair of MAP) { if (pair[0].test(t)) return pair[1]; }
+        return fallback || '📜';
+      },
+      /* ---------- 群聊删除 ---------- */
+      askDelGroup(g) {
+        this.confirmBoxOpen('删除群聊？', '「' + g.name + '」的群聊记录将一并删除（剧情主线不受影响）。', () => {
+          const i = this.story.phone.groups.findIndex(x => x.id === g.id);
+          if (i >= 0) this.story.phone.groups.splice(i, 1);
+          delete this.story.phone.chats[g.id];
+          if (this.wxGroup && this.wxGroup.id === g.id) { this.wxGroup = null; this.phoneView = 'wx'; }
+          this.toast('群聊已删除', '🗑');
+        });
+      },
       confirmBoxOpen(title, text, fn) { this.confirmBox = { open: true, title, text, fn }; },
       spawnAffFx(fxList) {
         (fxList || []).forEach((fx, i) => {
@@ -290,6 +327,7 @@
         if (!Array.isArray(st.phone.weibo.supertopics)) st.phone.weibo.supertopics = [];
         if (!Array.isArray(st.phone.groups)) st.phone.groups = [];
         if (st.settings.styleNote == null) st.settings.styleNote = '';
+        if (!st.nineFmt) st.nineFmt = {};
         if (st.useNineFormat == null) st.useNineFormat = false;
         if (st.settings.fandom == null) st.settings.fandom = (st.genreKey === 'entertainment');
         st.updatedAt = Date.now();
@@ -525,6 +563,15 @@
         }
         const q = ((lastUser ? lastUser.text : '') + ' ' + (lastAi ? (lastAi.raw || lastAi.text).slice(-80) : '')).trim();
         if (!q) return [];
+        return this._doRetrieve(q);
+      },
+      /* 共享记忆检索（剧情/微信/微博/朋友圈四场景互通） */
+      async retrieveMemories(query) {
+        if (!query || !this.mem.records.length) return [];
+        const res = await this._doRetrieve(query);
+        return res;
+      },
+      async _doRetrieve(q) {
         try {
           const res = await PW.Rag.search(this.story.id, this.mem.records, q, this.settings.topK, this.settings.memoryMode === 'semantic');
           return res.hits.map(h => ({ rec: h.rec, label: `第${h.rec.chapter || 1}节·${this.memKindName(h.rec.kind)}${h.rec.speaker ? '·' + h.rec.speaker : ''}` }));
@@ -742,8 +789,14 @@
         return out.length ? out : [{ type: 'main', blocks: this.parseAiBlocks(text || '') }];
       },
       fmtText(sec) {
-        return sec.lines.map(x => x.replace(/[*`]+/g, '')).join('  ');
+        return sec.lines.join('  ');
       },
+      nineDefault(key) { return (PW.NINE_DEFAULTS[key] || '').slice(0, 60); },
+      resetNineFmt() {
+        this.story.nineFmt = {};
+        this.toast('九段式规范已恢复默认', '🔄');
+      },
+      resetNineOne(key) { this.story.nineFmt[key] = ''; },
       castLines(sec) {
         return sec.lines.filter(l => l.trim() && !/^\[/.test(l.trim())).map(l => {
           const m = l.replace(/^[*\s]+|[*\s]+$/g, '').match(/^([^：:]{1,12})[：:]\s*([\s\S]+)$/);

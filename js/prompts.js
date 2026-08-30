@@ -7,7 +7,20 @@
  */
 window.PW = window.PW || {};
 (function () {
+  const NL = String.fromCharCode(10);
   const fmtDate = ts => new Date(ts).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+
+  /* 九段式规范：按段拼接（用户自定义段优先，默认段兜底） */
+  function buildNineSpec(story) {
+    const fmt = story.nineFmt || {};
+    let spec = '【九段式输出格式（绝对命令）】每次回复必须包含以下9个部分，按顺序输出，缺一不可；各部分之间可以连贯书写，不必刻意分段，但每部分必须以【段名】开头标记：';
+    PW.NINE_PARTS.forEach(p => {
+      const override = fmt[p.key];
+      const txt = (override != null && override.trim()) ? override.trim() : PW.NINE_DEFAULTS[p.key];
+      spec += '\n\n' + p.name + '\n' + txt;
+    });
+    return spec;
+  }
 
   /* ---------- L0：系统主提示词 ---------- */
   function gmSystem(story, layers) {
@@ -25,12 +38,11 @@ window.PW = window.PW || {};
         + '2. 绝不代替玩家角色做决定，绝不描写玩家角色未声明的行动与心理；其他角色只对玩家已声明的行为做出反应。\n'
         + '3. 若有角色好感或状态变化，可在回复末尾另起一行输出隐藏标记（系统自动剔除，玩家不可见，不要在正文解释）：[[AFF:NPC名:+3]] 或 [[AFF:NPC名:-2]]、[[STATE:NPC名:状态短语]]。\n';
       if (story.useNineFormat) {
-        sys += '\n\n' + PW.NINE_FORMAT_SPEC;
-        sys += '\n\n【系统附加协议（最高优先级）】\n1. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。\n2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情到抉择点必须停下等待玩家输入。\n';
+        sys += NL + NL + buildNineSpec(story);
+        sys += NL + NL + '【系统附加协议（最高优先级）】' + NL
+          + '1. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。' + NL
+          + '2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情到抉择点必须停下等待玩家输入。';
         return sys;
-      }
-      if (story.settings.optionsOn) {
-        sys += '4. 如适合，可在最末尾给出2~4个简短行动建议，格式：[选项]\\n1. …\\n2. …（玩家可无视）。\n';
       }
       sys += '5. 好感度与状态变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情，不可无脑上升；单次变化幅度不超过±10。\n';
       return sys;
@@ -85,8 +97,12 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 
     /* 输出格式协议 */
     if (story.useNineFormat) {
-      sys += '\\n\\n' + PW.NINE_FORMAT_SPEC;
-      sys += '\\n\\n【系统附加协议（最高优先级）】\\n1. 用中文。\\n2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情推进到需要玩家抉择时必须停下等待玩家输入。\\n3. 若有NPC好感或状态变化，在回复末尾输出隐藏标记：[[AFF:NPC名:+3]] / [[STATE:NPC名:状态短语]]（系统自动剔除，玩家不可见，不要在正文解释）。\\n4. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。';
+      sys += NL + NL + buildNineSpec(story);
+      sys += NL + NL + '【系统附加协议（最高优先级）】' + NL
+        + '1. 用中文。' + NL
+        + '2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情推进到需要玩家抉择时必须停下等待玩家输入。' + NL
+        + '3. 若有NPC好感或状态变化，在回复末尾输出隐藏标记：[[AFF:NPC名:+3]] / [[STATE:NPC名:状态短语]]（系统自动剔除，玩家不可见，不要在正文解释）。' + NL
+        + '4. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。';
     } else {
     sys += `
 
@@ -96,11 +112,10 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 3. 【最高铁律】严禁代替玩家角色做任何决定；严禁描写玩家角色的心理活动、未声明的动作与台词；严禁让NPC替玩家回答或行动。剧情推进到需要玩家抉择时，必须停下等待玩家输入。NPC只对玩家已做的事做出反应。玩家行动遇到困难时如实呈现阻力，不自动成功。
 4. 回复正文结束后，若有NPC好感或状态变化，另起一行输出隐藏标记（系统会剔除，玩家不可见，不要解释它们）：
    [[AFF:NPC名:+3]] 或 [[AFF:NPC名:-2]]；[[STATE:NPC名:状态短语]]
-5. ${story.settings.optionsOn ? '正文与标记之后，另起一行给出2~4个简短行动选项，格式严格为：\n[选项]\n1. 选项一（10字内）\n2. 选项二\n3. 选项三\n（玩家可无视选项自由输入，选项要有多样性：推进/试探/保守各一）' : '不需要输出[选项]块。'}
+5. 好感度变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情因果，不可无脑上升；单次变化幅度不超过±10。
 6. 若玩家消息以（　）包裹或以OOC:开头，视为作者指令：按其调整世界与剧情走向，但正文中不出现解释性文字。
 7. 手机剧情（若启用）：NPC发消息、朋友圈动态、微博等用标记：【微信|NPC名|内容】【朋友圈|NPC名|动态内容】，系统会路由到手机界面。
-8. 保持NPC言行与其性格、身份、秘密一致；重要伏笔可以埋设，长线剧情要能接得上记忆。
-9. 好感度变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情因果，不可无脑上升；单次变化幅度不超过±10。`;
+8. 保持NPC言行与其性格、身份、秘密一致；重要伏笔可以埋设，长线剧情要能接得上记忆。`;
     }
     return sys;
   }
@@ -193,39 +208,45 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     ];
   }
 
+  /* 记忆块拼接（手机各场景与主线共享记忆） */
+  function memBlock(memText) {
+    if (!memText || !memText.trim()) return '';
+    return NL + '【相关剧情记忆（来自主线/其他互动，供参考，自然融入，不要复述）】' + NL + memText;
+  }
+
   /* ---------- 手机：NPC主动发微信 ---------- */
-  function proactiveChatPrompt(story) {
+  function proactiveChatPrompt(story, memText) {
     const cast = (story.npcs || []).filter(x => x.present !== false)
       .map(x => `${x.name}（${x.identity || ''}；性格：${(x.personality || '').slice(0, 30)}；好感度${x.affinity == null ? 50 : x.affinity}）`).join('；');
     return [
-      { role: 'system', content: '【任务：微信主动消息】你是互动小说的社交模拟器。根据剧情进展，挑选一位【最有可能主动联系玩家】的NPC，让TA在微信上主动发来消息。只输出JSON对象（不要代码块）：{"npc":"NPC名","messages":["第一条","第二条"],"why":"简短理由(12字内)"}。消息要完全贴合该NPC的性格、说话风格与当前剧情，1~3条，口语化、像真的微信。' },
+      { role: 'system', content: '【任务：微信主动消息】你是互动小说的社交模拟器。根据剧情进展，挑选一位【最有可能主动联系玩家】的NPC，让TA在微信上主动发来消息。只输出JSON对象（不要代码块）：{"npc":"NPC名","messages":["第一条","第二条"],"why":"简短理由(12字内)"}。消息要完全贴合该NPC的性格、说话风格与当前剧情，1~3条，口语化、像真的微信。' + memBlock(memText) },
       { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成主动消息。` }
     ];
   }
 
   /* ---------- 手机：微信群聊 ---------- */
-  function groupChatPrompt(story, group, userText, recent) {
+  function groupChatPrompt(story, group, userText, recent, memText) {
     const members = (group.memberIds || []).map(id => (story.npcs || []).find(n => n.id === id)).filter(Boolean);
     const cast = members.map(n => `${n.name}（${n.identity || ''}；性格：${(n.personality || '').slice(0, 30)}；说话风格：${(n.speech || '').slice(0, 20)}；好感度${n.affinity == null ? 50 : n.affinity}）`).join('\n');
     const rec = (recent || []).slice(-10).map(m => `${m.name || (m.role === 'me' ? (story.player.name || '我') : '成员')}：${m.text}`).join('\n');
     return [
-      { role: 'system', content: `【任务：群聊】你在微信群聊「${group.name}」中同时扮演以下所有NPC：\n${cast}\n要求：\n1. 挑选2~3位最可能开口的NPC回复，每人1~2条，其余人不说话；\n2. 每条一行，格式严格为：名字：内容\n3. 完全贴合各自性格与说话风格，可以互相接话、互怼、调侃、@某人；\n4. 口语化像真微信群聊，贴合当前剧情；不要旁白，不要引号。` },
+      { role: 'system', content: `【任务：群聊】你在微信群聊「${group.name}」中同时扮演以下所有NPC：\n${cast}\n要求：\n1. 挑选2~3位最可能开口的NPC回复，每人1~2条，其余人不说话；\n2. 每条一行，格式严格为：名字：内容\n3. 完全贴合各自性格与说话风格，可以互相接话、互怼、调侃、@某人；\n4. 口语化像真微信群聊，贴合当前剧情；不要旁白，不要引号。${memBlock(memText)}` },
       { role: 'user', content: `最近的群聊记录：\n${rec || '（刚开始）'}\n\n玩家（${story.player.name || '我'}）刚在群里说：${userText}\n\n请输出各NPC的回复。` }
     ];
   }
 
   /* ---------- 手机：微信聊天 ---------- */
-  function phoneChatMessages(story, npc, userText, chatHistory) {
+  function phoneChatMessages(story, npc, userText, chatHistory, memText) {
     const recent = (chatHistory || []).slice(-8).map(m =>
       `${m.role === 'me' ? story.player.name || '我' : npc.name}：${m.text}`).join('\n');
     return [
-      { role: 'system', content: '【任务：微信聊天】你正在扮演互动小说《' + story.title + '》中的NPC「' + npc.name + '」在微信上与玩家聊天。\n角色：' + npc.name + '，' + (npc.identity || '') + '，性格：' + (npc.personality || '') + '，说话风格：' + (npc.speech || '') + '。与玩家关系：' + (npc.relation || '') + (npc.secret ? '（隐藏秘密，聊到相关话题可微妙流露但绝不直说）' : '') + '\n剧情背景摘要：' + ((story.chat.summary || story.worldview.text || '').slice(0, 300)) + '\n要求：符合微信聊天习惯——口语化、短句、可以1~3条连发；每条一行；贴合角色性格与当前剧情；不要旁白不要引号。' },
+      { role: 'system', content: '【任务：微信聊天】你正在扮演互动小说《' + story.title + '》中的NPC「' + npc.name + '」在微信上与玩家聊天。\n角色：' + npc.name + '，' + (npc.identity || '') + '，性格：' + (npc.personality || '') + '，说话风格：' + (npc.speech || '') + '。与玩家关系：' + (npc.relation || '') + (npc.secret ? '（隐藏秘密，聊到相关话题可微妙流露但绝不直说）' : '') + '\n剧情背景摘要：' + ((story.chat.summary || story.worldview.text || '').slice(0, 300)) + '\n要求：符合微信聊天习惯——口语化、短句、可以1~3条连发；每条一行；贴合角色性格与当前剧情；不要旁白不要引号。' + memBlock(memText) },
       { role: 'user', content: `最近的聊天记录：\n${recent || '（刚开始聊）'}\n\n玩家刚发来：${userText}\n\n请以${npc.name}的身份回复（1~3行，每行一条消息）。` }
     ];
   }
 
   /* ---------- 手机：朋友圈（并入微信） ---------- */
-  function momentsPrompt(story, n) {
+  function momentsPrompt(story, n, memText) {
     const fandom = !!story.settings.fandom;
     const cast = (story.npcs || []).filter(x => x.present !== false)
       .map(x => `${x.name}（${x.identity || ''}，性格：${(x.personality || '').slice(0, 30)}）`).join('；');
@@ -234,10 +255,10 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       : '动态符合人设与近况，可带emoji。';
     return [
       { role: 'system', content: `【任务：朋友圈】你是社交媒体内容生成器，为互动小说里的NPC们生成微信朋友圈动态。只输出JSON数组（不要代码块），每项：{"npc":"NPC名","text":"动态内容(80字内)","likes":数字,"comments":[{"name":"名字(NPC或粉丝)","text":"评论(30字内)"}]}。${flavor}` },
-      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n最近剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成${n}条与剧情有微妙关联的朋友圈动态（可互相评论）。` }
-    ];
+      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n最近剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成${n}条与剧情有微妙关联的朋友圈动态（可互相评论）。` },
+    ].map(m => m.role === 'system' ? { role: 'system', content: m.content + memBlock(memText) } : m);
   }
-  function weiboPrompt(story) {
+  function weiboPrompt(story, memText) {
     const fandom = !!story.settings.fandom;
     const artists = (story.npcs || []).filter(x => x.present !== false)
       .map(x => `${x.name}（${x.identity || ''}）`).join('；');
@@ -250,7 +271,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 - 超话：每位主要艺人一个个人超话（阅读量/帖子数要像真的），并且生成一个"玩家×某NPC"或"某NPC×某NPC"的CP超话；`
       : `微博内容与世界观和剧情呼应：NPC本人发言贴合人设，营销号/网友围绕剧情事件讨论，评论自然多样；超话按剧情里的话题生成；`;
     return [
-      { role: 'system', content: `【任务：微博】你是社交媒体内容生成器，为互动小说生成完整的微博生态。只输出JSON对象（不要代码块）：\n{"hot":[{"text":"热搜词条","tag":"沸|爆|热|新之一","heat":"234.5万"}],\n"posts":[{"author":"npc:NPC名","text":"微博正文(100字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝名/路人/其他NPC)","text":"评论内容(30字内)"}]},\n{"author":"marketing:账号名",...同上},\n{"author":"netizen:昵称",...同上}],\n"supertopics":[{"name":"超话名","type":"个人或cp","readers":"1.2亿","postsN":"56.7万"}]}\n作者类型：npc:开头=NPC本人；marketing:=营销号；netizen:=普通网友。` },
+      { role: 'system', content: `【任务：微博】你是社交媒体内容生成器，为互动小说生成完整的微博生态。只输出JSON对象（不要代码块）：\n{"hot":[{"text":"热搜词条","tag":"沸|爆|热|新之一","heat":"234.5万"}],\n"posts":[{"author":"npc:NPC名","text":"微博正文(100字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝名/路人/其他NPC)","text":"评论内容(30字内)"}]},\n{"author":"marketing:账号名",...同上},\n{"author":"netizen:昵称",...同上}],\n"supertopics":[{"name":"超话名","type":"个人或cp","readers":"1.2亿","postsN":"56.7万"}]}\n作者类型：npc:开头=NPC本人；marketing:=营销号；netizen:=普通网友。${memBlock(memText)}` },
       { role: 'user', content: `故事：${story.title}\n世界观：${(story.worldview.text || '').slice(0, 200)}\n角色（艺人/人物）：${artists}\n玩家：${player}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n${req}\n\n生成：6条热搜、8条微博（至少2条营销号+2条路人网友+2条NPC本人+1条工作室风）、4个超话（含至少1个CP超话）。` }
     ];
   }
@@ -261,24 +282,22 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     ];
   }
   /* ---------- 微博：热搜词条 / 超话 详情 ---------- */
-  function hotDetailPrompt(story, hotText) {
-    const tpl = PW.TEMPLATES[story.genreKey];
-    const fandom = tpl && tpl.key === 'entertainment';
+  function hotDetailPrompt(story, hotText, memText) {
+    const fandom = !!story.settings.fandom;
     const artists = (story.npcs || []).filter(x => x.present !== false).map(x => `${x.name}（${x.identity || ''}）`).join('；');
     return [
-      { role: 'system', content: `【任务：热搜详情】你是社交媒体内容生成器。针对一条热搜词条，生成微博正文与评论区。只输出JSON数组（不要代码块），每项：{"author":"npc:NPC名"或"marketing:账号名"或"netizen:昵称","text":"微博内容(120字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝/路人/黑粉,口吻有辨识度)","text":"评论(30字内)"}]}。共4~6条。${fandom ? '娱乐圈背景：评论区分唯粉/cpf/黑粉/路人，口吻要有饭圈辨识度。' : ''}` },
+      { role: 'system', content: `【任务：热搜详情】你是社交媒体内容生成器。针对一条热搜词条，生成微博正文与评论区。只输出JSON数组（不要代码块），每项：{"author":"npc:NPC名"或"marketing:账号名"或"netizen:昵称","text":"微博内容(120字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝/路人/黑粉,口吻有辨识度)","text":"评论(30字内)"}]}。共4~6条。${fandom ? '娱乐圈背景：评论区分唯粉/cpf/黑粉/路人，口吻要有饭圈辨识度。' : ''}${memBlock(memText)}` },
       { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n热搜词条：${hotText}\n\n生成与该词条相关的微博和评论（内容要与词条和剧情呼应）。` }
     ];
   }
-  function supertopicPrompt(story, cha) {
-    const tpl = PW.TEMPLATES[story.genreKey];
+  function supertopicPrompt(story, cha, memText) {
     const isCp = cha.type === 'cp';
     const artists = (story.npcs || []).filter(x => x.present !== false).map(x => `${x.name}（${x.identity || ''}）`).join('；');
     const theme = isCp
       ? `这是CP超话「${cha.name}」，生成cp粉的磕糖帖、分析帖、二创安利（口吻：cpf，甜蜜疯了但要真实）；`
       : `这是个人超话「${cha.name}」，生成唯粉的应援帖、生图安利、日程打卡（口吻：唯粉，护短且热情）；`;
     return [
-      { role: 'system', content: `【任务：超话详情】你是社交媒体内容生成器，生成超话内的帖子流。只输出JSON数组（不要代码块），每项：{"author":"netizen:粉丝昵称","text":"帖子(100字内,超话社区口吻,可带#超话名#)","likes":数字,"comments":[{"name":"回复者","text":"回复(30字内)"}]}。共4~6条。${theme}` },
+      { role: 'system', content: `【任务：超话详情】你是社交媒体内容生成器，生成超话内的帖子流。只输出JSON数组（不要代码块），每项：{"author":"netizen:粉丝昵称","text":"帖子(100字内,超话社区口吻,可带#超话名#)","likes":数字,"comments":[{"name":"回复者","text":"回复(30字内)"}]}。共4~6条。${theme}${memBlock(memText)}` },
       { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：${(story.chat.summary || '').slice(0, 200) || '（刚开始）'}\n\n生成「${cha.name}」超话的帖子流。` }
     ];
   }

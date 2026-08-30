@@ -96,6 +96,21 @@
 /* 微信群聊 */
 .grp-ava { background: linear-gradient(135deg, #7ba3e0, #5b8ac9); color: #fff !important; }
 .grp-name { font-size: 11px; color: var(--ink3); margin: 0 4px 2px; }
+.wx-item { position: relative; }
+.del-grp {
+  position: absolute; right: 8px; top: 8px; width: 24px; height: 24px;
+  border-radius: 8px; background: var(--card2); color: var(--ink3);
+  font-size: 12px; display: flex; align-items: center; justify-content: center;
+}
+.del-grp:active { color: var(--danger); }
+
+/* 九段式格式设置 */
+.nf-item { background: var(--card); border-radius: 12px; margin-bottom: 8px; box-shadow: var(--shadow); overflow: hidden; }
+.nf-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 13px; font-size: 13.5px; font-weight: 700; cursor: pointer; color: var(--ink);
+}
+.nf-editor { font-size: 12.5px; line-height: 1.7; min-height: 120px; margin-bottom: 10px; }
 
 /* 微博（饭圈生态） */
 .h-click { cursor: pointer; transition: background .12s; border-radius: 8px; }
