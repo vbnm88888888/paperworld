@@ -72,6 +72,8 @@ window.PW = window.PW || {};
 
   /* ---------- 朋友圈（微信内） ---------- */
   async function genMoments(story, n) {
+    /* 刷新即清掉玩家自己的旧帖子（按用户习惯：刷新=看新内容） */
+    story.phone.moments = story.phone.moments.filter(m => !m.mine);
     const memText = await memFor('朋友圈 动态 ' + (story.chat.summary || '').slice(0, 80));
     const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPrompt(story, n, memText), stream: false, temperature: 1.4 });
     let arr;
@@ -92,6 +94,7 @@ window.PW = window.PW || {};
         })
       });
     });
+    /* 刷新时清掉玩家自己的旧帖子（按用户习惯：刷新=看新内容） */
     story.phone.moments.unshift(...created);
     if (story.phone.moments.length > 30) story.phone.moments.length = 30;
     if (created.length) {
@@ -203,11 +206,14 @@ window.PW = window.PW || {};
     return { hot, posts, supertopics };
   }
 
-  /* ---------- 朋友圈：楼中楼（玩家回复NPC评论） ---------- */
+  /* ---------- 朋友圈：楼中楼（玩家回复NPC评论，由被回复的NPC回应） ---------- */
   async function replyToComment(story, moment, comment, text) {
     if (!comment.replies) comment.replies = [];
     comment.replies.push({ id: PW.Store.uid('r'), name: story.player.name || '我', mine: true, text: String(text).slice(0, 80) });
-    const npc = (story.npcs || []).find(x => x.id === moment.npcId);
+    /* 谁的评论谁回应：优先取评论作者的NPC；若评论来自帖主，则由帖主回应 */
+    const npc = (story.npcs || []).find(x => x.id === comment.npcId)
+      || (story.npcs || []).find(x => x.id === moment.npcId)
+      || null;
     let npcReply = null;
     if (npc) {
       try {

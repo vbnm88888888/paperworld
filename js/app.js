@@ -82,7 +82,6 @@
         const custom = (this.settings.customModels || []).map(id => ({ id, name: id + ' · 自定义' }));
         return PW.CONFIG.MODELS.concat(custom);
       },
-      styleList() { return PW.STYLES; },
       sortedStories() { return this.stories.slice().sort((a, b) => b.updatedAt - a.updatedAt); },
       tabs() {
         const t = [
@@ -438,7 +437,6 @@
         PW.Store.compressImage(f, url => { form.avatar = { type: 'img', value: url }; this.toast('头像已更新', '🖼'); });
         ev.target.value = '';
       },
-      emojiPoolFor(key) { return PW.Avatars.emojiPool(key); },
       npcByName(name) {
         return this.story ? this.story.npcs.find(n => n.name === name) : null;
       },
@@ -799,112 +797,9 @@
         }
       },
       /* ---- 结构化格式解析（9条格式 → 卡片；无标记时整体作为正文） ---- */
-      parseStructured(text) {
-        const sections = [];
-        let cur = null;
-        let mode = 'main';
-        const stripMd = s => s.replace(/[*_`]+/g, '');
-        const newSec = (type, sub) => { cur = { type, sub: sub || '', lines: [] }; sections.push(cur); return cur; };
-        for (const raw of (text || '').split('\n')) {
-          const l = raw.trim();
-          const s = stripMd(l);
-          if (!l) { if (cur) cur.lines.push(''); continue; }
-          if (/^[-—_=∙•]{4,}$/.test(s)) { continue; }
-          /* 正文切换（先于引用块检测，兼容 > **正文** 与 **正文**） */
-          if (/\*\*正文\*\*\s*$/.test(s) || /^正文\s*\**$/.test(s) || /【正文内容|【正文】/.test(s)) { mode = 'main'; cur = null; continue; }
-          /* 时间 */
-          if (/【时间】|时间流逝\s*[:：]/.test(s)) { newSec('time'); mode = 'meta'; cur.lines.push(l); continue; }
-          /* 在场人员（须先于场景检测，标记行也带[]） */
-          if (/【在场人员|在场角色人数|目前在场/.test(s)) { newSec('cast'); mode = 'cast'; continue; }
-          /* 场景 */
-          if (/【当前场景】/.test(s) || (mode === 'meta' && /^\[.+\]$/.test(s))) {
-            newSec('scene'); mode = 'meta'; cur.lines.push(l.replace(/^\*{0,3}|\*{0,3}$/g, '')); continue;
-          }
-          /* 好感度行 */
-          if (/^🔹/.test(s) || /好感度进度/.test(s)) {
-            if (!cur || cur.type !== 'aff') newSec('aff');
-            mode = 'aff';
-            if (!/好感度进度/.test(s)) cur.lines.push(l);
-            continue;
-          }
-          if (/^>/.test(l)) {
-            const inner = l.replace(/^>\s?/, '');
-            const si = stripMd(inner);
-            if (/^[-—_=∙•\s]{4,}$/.test(si)) { continue; }
-            if (si.replace(/\s/g, '') === '正文' || /【正文/.test(si)) { mode = 'main'; cur = null; continue; }
-            let sub = 'quote';
-            if (/环境详图|核心地标|主要建筑|功能设施|环境景观|人群活动|可互动点/.test(si)) sub = 'map';
-            else if (/日程|固定日程|待办与机会|世界动态|固定时间|搜刮|探查|防御|联络/.test(si)) sub = 'schedule';
-            else if (/已探索区域|情报更新/.test(si)) sub = 'explore';
-            if (!cur || cur.type !== 'quote' || cur.sub !== sub) newSec('quote', sub);
-            cur.lines.push(inner); continue;
-          }
-          /* 日程/探索（无 > 前缀的行也能归队） */
-          if (/【每日日程|固定日程|待办与机会|世界动态|【情报更新|已解锁新区域|【已探索区域|【搜刮|【探查|【防御|【联络/.test(s)) {
-            mode = 'quote';
-            const desired = /情报更新|已解锁|已探索/.test(s) ? 'explore' : 'schedule';
-            if (!cur || cur.type !== 'quote' || cur.sub !== desired) newSec('quote', desired);
-            cur.lines.push(l.replace(/^>\s?/, '')); continue;
-          }
-          if (/【旁白】|情节回溯|任务提示|系统自检/.test(s)) { newSec('aside'); mode = 'aside'; continue; }
-          if (/【心理活动|心理活动\s*[:：]/.test(s)) { newSec('psycho'); mode = 'psycho'; continue; }
-          if (mode === 'cast' && cur) { cur.lines.push(l); continue; }
-          if (mode === 'aff' && cur) { cur.lines.push(l); continue; }
-          if (mode === 'aside' && cur) { cur.lines.push(l); continue; }
-          if (mode === 'psycho' && cur) { cur.lines.push(l); continue; }
-          if (mode === 'quote' && cur && cur.type === 'quote') { cur.lines.push(l.replace(/^>\s?/, '')); continue; }
-          if (!cur || cur.type !== 'main') newSec('main');
-          mode = 'main'; cur.lines.push(l);
-        }
-        const out = sections
-          .filter(sec => sec.lines.some(x => x.trim()))
-          .map(sec => sec.type === 'main' ? { type: 'main', blocks: this.parseAiBlocks(sec.lines.join('\n')) } : sec);
-        return out.length ? out : [{ type: 'main', blocks: this.parseAiBlocks(text || '') }];
-      },
-      fmtText(sec) {
-        return sec.lines.join('  ');
-      },
-      nineDefault(key) { return (PW.NINE_DEFAULTS[key] || '').slice(0, 60); },
       insertNineTemplate() {
         this.story.outputFormat = PW.NINE_TEMPLATE;
         this.toast('已插入九段式模板，可自由改写', '📋');
-      },
-      castLines(sec) {
-        return sec.lines.filter(l => l.trim() && !/^\[/.test(l.trim())).map(l => {
-          const m = l.replace(/^[*\s]+|[*\s]+$/g, '').match(/^([^：:]{1,12})[：:]\s*([\s\S]+)$/);
-          return m ? { name: m[1], desc: m[2] } : { name: '', desc: l };
-        });
-      },
-      affLines(sec) {
-        return sec.lines.filter(l => /好感度/.test(l)).map(l => {
-          const m = l.replace(/^[*\s🔹]+|[\s*]+$/g, '').match(/^([^：:]{1,12})[：:]\s*好感度\s*(-?\d+)\s*%?\s*(?:\||｜)?\s*(.*)$/);
-          if (!m) return null;
-          const rest = m[3] || '';
-          const st = rest.match(/状态\s*[:：]\s*([^|｜]*)/);
-          return { name: m[1], value: Math.max(-100, Math.min(100, parseInt(m[2], 10) || 0)), status: st ? st[1].trim() : '' };
-        }).filter(Boolean);
-      },
-      syncAffFromSection(sec) {
-        (this.affLines(sec) || []).forEach(a => {
-          const npc = this.npcByName(a.name);
-          if (npc && npc.affinity !== a.value) npc.affinity = a.value;
-        });
-      },
-      quoteParts(sec) {
-        const lines = sec.lines.filter(l => l.trim()).map(l => l.replace(/\*\*/g, '').trim());
-        let title = '';
-        const rest = [];
-        lines.forEach(l => {
-          if (!title) {
-            const m = l.match(/【([^】]+)】/);
-            if (m) { title = m[1]; rest.push(l.replace(/【[^】]*】/, '').trim()); return; }
-          }
-          rest.push(l);
-        });
-        if (!title) {
-          title = sec.sub === 'map' ? '当前区域环境详图' : sec.sub === 'schedule' ? '日程' : sec.sub === 'explore' ? '探索进度' : '详情';
-        }
-        return { title, lines: rest.filter(l => l.trim()) };
       },
       scrollBottom(force) {
         if (this.tab !== 'plot' && !force) return;
@@ -1020,7 +915,6 @@
         story.chat.messages.push(msg);
         this._aiCache.set(msg.id, this.aiBlocks(msg));
         /* 同步好感度（卡片模式/自定义格式模式通用） */
-        this._aiCache.get(msg.id).forEach(sec => { if (sec.type === 'aff') this.syncAffFromSection(sec); });
         this.syncAffFromText(raw);
         this.addMemories(story, [{ kind: 'ai', speaker: 'GM', text: raw.slice(0, 800) }]);
         this.routePhoneMarks(phone.marks);

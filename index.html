@@ -342,8 +342,9 @@
                 <!-- 微信：聊天 + 朋友圈 -->
                 <template v-else-if="phoneView==='wx'">
                   <div class="app-head"><button class="back" @click="phoneView='home'">‹</button><b>微信</b>
-                    <button class="op" title="发起群聊" @click="openGroupModal" style="margin-right:4px">👥</button>
-                    <button class="op" title="让NPC主动找你" @click="proactiveWx" :disabled="wxProBusy">{{ wxProBusy ? '⏳' : '📢' }}</button></div>
+                    <button class="op" v-if="wxTab==='moments'" @click="refreshMoments" :disabled="moBusy" style="margin-right:4px">{{ moBusy ? '⏳' : '🔄' }}</button>
+                    <button class="op" v-if="wxTab==='chat'" title="发起群聊" @click="openGroupModal" style="margin-right:4px">👥</button>
+                    <button class="op" v-if="wxTab==='chat'" title="让NPC主动找你" @click="proactiveWx" :disabled="wxProBusy">{{ wxProBusy ? '⏳' : '📢' }}</button></div>
                   <div class="app-tabs">
                     <button :class="{on: wxTab==='chat'}" @click="wxTab='chat'">💬 聊天</button>
                     <button :class="{on: wxTab==='moments'}" @click="wxTab='moments'; ensureMoments()">🌸 朋友圈</button>
