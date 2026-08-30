@@ -195,7 +195,34 @@ window.PW = window.PW || {};
     story.phone.weibo.hot = hot;
     story.phone.weibo.posts = posts.concat(story.phone.weibo.posts.filter(p => !posts.some(x => x.text === p.text))).slice(0, 24);
     story.phone.weibo.supertopics = supertopics;
+    /* 微博内容入库共享记忆：热搜+帖子摘要（四端互通，剧情/微信可引用舆论动向） */
+    if (posts.length || hot.length) {
+      const digest = (hot.slice(0, 3).map(h => '#' + h.text).join(' ') || '') + '；帖子：' + posts.slice(0, 5).map(p => `${p.name}说「${p.text.slice(0, 50)}」`).join('；');
+      await PW.App.addMemories(story, [{ kind: 'phone', speaker: '微博', text: '微博舆论动态：' + digest }]);
+    }
     return { hot, posts, supertopics };
+  }
+
+  /* ---------- 朋友圈：楼中楼（玩家回复NPC评论） ---------- */
+  async function replyToComment(story, moment, comment, text) {
+    if (!comment.replies) comment.replies = [];
+    comment.replies.push({ id: PW.Store.uid('r'), name: story.player.name || '我', mine: true, text: String(text).slice(0, 80) });
+    const npc = (story.npcs || []).find(x => x.id === moment.npcId);
+    let npcReply = null;
+    if (npc) {
+      try {
+        const { content } = await PW.Api.chat({
+          messages: PW.Prompts.momentReplyToReplyPrompt(story, npc, moment.text, comment.text, text),
+          stream: false, temperature: 1.15
+        });
+        npcReply = { id: PW.Store.uid('r'), name: npc.name, npcId: npc.id, text: (content || '').trim().slice(0, 80).replace(/^["「]|["」]$/g, '') };
+        comment.replies.push(npcReply);
+      } catch (e) { /* NPC回复失败不影响玩家回复 */ }
+    }
+    await PW.App.addMemories(story, [
+      { kind: 'phone', speaker: story.player.name, text: `（朋友圈楼中楼：玩家回复${comment.name}的评论「${comment.text}」说）${text}` + (npcReply ? `；${npc.name}回应「${npcReply.text}」` : '') }
+    ]);
+    return npcReply;
   }
 
   /* ---------- 微博：玩家发帖 ---------- */
@@ -218,7 +245,8 @@ window.PW = window.PW || {};
         const npc = findNpc(story, it.name);
         post.comments.push({
           id: PW.Store.uid('c'), name: String(it.name || '路人'),
-          npcId: npc ? npc.id : null, text: String(it.text || '').slice(0, 60)
+          npcId: npc ? npc.id : null, text: String(it.text || '').slice(0, 60),
+          likes: Math.max(0, parseInt(it.likes, 10) || Math.floor(Math.random() * 200))
         });
       });
     } catch (e) { /* 评论解析失败不影响发帖 */ }
@@ -281,7 +309,9 @@ window.PW = window.PW || {};
     post.reposts = Math.max(0, parseInt(it.reposts, 10) || Math.floor(Math.random() * 300));
     post.likedByMe = false;
     post.comments = (it.comments || []).slice(0, 5).map(c => ({
-      id: PW.Store.uid('c'), name: String(c.name || '路人'), text: String(c.text || '').slice(0, 60)
+      id: PW.Store.uid('c'), name: String(c.name || '路人'), npcId: null,
+      text: String(c.text || '').slice(0, 60),
+      likes: Math.max(0, parseInt(c.likes, 10) || Math.floor(Math.random() * 800))
     }));
     return post;
   }
@@ -315,5 +345,5 @@ window.PW = window.PW || {};
     return { replies };
   }
 
-  window.PW.Phone = { wechatSend, proactiveWechat, genMoments, genWeibo, commentOnPost, hotDetail, supertopicFeed, groupSend, playerMomentPost, playerWeiboPost };
+  window.PW.Phone = { wechatSend, proactiveWechat, genMoments, genWeibo, commentOnPost, hotDetail, supertopicFeed, groupSend, playerMomentPost, playerWeiboPost, replyToComment };
 })();

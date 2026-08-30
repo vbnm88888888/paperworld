@@ -57,6 +57,9 @@
         moCompose: '',
         wbCompose: '',
         chaModal: { open: false, name: '', type: '个人', memberIds: [] },
+        replyFor: null,        // 正在回复的评论id
+        replyText: '',
+        replyBusy: false,
         wxNpc: null,
         phoneInput: '',
         wxBusy: false, moBusy: false, wbBusy: false,
@@ -1365,6 +1368,26 @@
         try { await PW.Phone.commentOnPost(this.story, target, text); }
         catch (e) { this.showError(e); }
         finally { this.moBusy = false; }
+      },
+      /* ---------- 朋友圈楼中楼 ---------- */
+      async sendReplyCmt(moment, comment) {
+        const text = this.replyText.trim();
+        if (!text || this.replyBusy) return;
+        this.replyText = '';
+        this.replyBusy = true;
+        try {
+          const r = await PW.Phone.replyToComment(this.story, moment, comment, text);
+          if (r) this.toast(r.name + ' 回复了你', '💬');
+        } catch (e) { this.showError(e); }
+        finally { this.replyBusy = false; }
+      },
+      /* ---------- 删除超话 ---------- */
+      askDelCha(c) {
+        this.confirmBoxOpen('删除超话？', `「${c.name}」将从列表移除（已浏览的帖子不受影响）。`, () => {
+          const i = this.story.phone.weibo.supertopics.findIndex(x => x.name === c.name && x.type === c.type);
+          if (i >= 0) this.story.phone.weibo.supertopics.splice(i, 1);
+          this.toast('超话已删除', '🗑');
+        });
       },
       async refreshWeibo(silent) {
         this.wbBusy = true;

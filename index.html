@@ -393,11 +393,20 @@
                           <button @click="cmtFor = cmtFor===mo.id ? null : mo.id">💬 评论</button>
                         </div>
                         <div class="mo-comments" v-if="mo.comments.length">
-                          <div class="cmt" v-for="c in mo.comments" :key="c.id"><b>{{ c.name }}：</b>{{ c.text }}</div>
+                          <div class="cmt-block" v-for="c in mo.comments" :key="c.id">
+                            <div class="cmt"><b>{{ c.name }}：</b>{{ c.text }}<button class="cmt-reply" v-if="c.npcId" @click="replyFor = replyFor===c.id ? null : c.id">回复</button></div>
+                            <div class="cmt-replies" v-if="c.replies && c.replies.length">
+                              <div class="cmt" v-for="r in c.replies" :key="r.id" :class="{ 'mine-c': r.mine }"><b>{{ r.name }}：</b>{{ r.text }}</div>
+                            </div>
+                            <div class="mo-comment-input" v-if="replyFor===c.id">
+                              <input v-model="replyText" :placeholder="'回复 ' + c.name + ' …'" @keyup.enter="sendReplyCmt(mo, c)">
+                              <button class="btn sm primary" @click="sendReplyCmt(mo, c)" :disabled="!replyText || replyBusy">回复</button>
+                            </div>
+                          </div>
                         </div>
                         <div class="mo-comment-input" v-if="cmtFor===mo.id">
-                          <input v-model="cmtText" placeholder="评论一句…" @keyup.enter="sendCmt(mo)">
-                          <button class="btn sm primary" @click="sendCmt(mo)" :disabled="!cmtText">发送</button>
+                          <input v-model="cmtText" placeholder="评论这条动态…" @keyup.enter="sendCmt(mo)">
+                          <button class="btn sm primary" @click="sendCmt(mo)" :disabled="!cmtText || moBusy">发送</button>
                         </div>
                       </div>
                     </div>
@@ -536,7 +545,10 @@
                           <button @click="cmtFor = cmtFor===p.id ? null : p.id">💬 {{ p.comments.length }}</button>
                         </div>
                         <div class="mo-comments" v-if="p.comments.length">
-                          <div class="cmt" v-for="c in p.comments" :key="c.id"><b>{{ c.name }}：</b>{{ c.text }}</div>
+                          <div class="cmt" v-for="c in p.comments" :key="c.id">
+                            <b>{{ c.name }}：</b>{{ c.text }}
+                            <button class="cmt-like" :class="{on: c.liked}" @click="c.liked=!c.liked; c.likes=(c.likes||0)+(c.liked?1:-1)">👍 {{ c.likes || 0 }}</button>
+                          </div>
                         </div>
                         <div class="mo-comment-input" v-if="cmtFor===p.id">
                           <input v-model="cmtText" placeholder="评论一句…" @keyup.enter="sendCmt(p)">
@@ -570,6 +582,7 @@
                         <div class="cha-name">{{ c.name }} <span class="chip" style="font-size:10px">{{ c.type==='cp' ? 'CP超话' : '个人超话' }}</span></div>
                         <div class="cha-num">{{ chaSub(c) }} · 点进看帖子流</div>
                       </div>
+                      <button class="cha-del" @click.stop="askDelCha(c)">✕</button>
                       <button class="cha-sign" :class="{on: c.signed}" @click.stop="c.signed=!c.signed">{{ c.signed ? '已签到' : '签到' }}</button>
                     </div>
                   </div>

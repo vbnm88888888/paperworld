@@ -265,7 +265,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       : `微博内容与世界观和剧情呼应：NPC本人发言贴合人设，营销号/网友围绕剧情事件讨论，评论自然多样；超话按剧情里的话题生成；`;
     return [
       { role: 'system', content: `【任务：微博】你是社交媒体内容生成器，为互动小说生成完整的微博生态。只输出JSON对象（不要代码块）：\n{"hot":[{"text":"热搜词条","tag":"沸|爆|热|新之一","heat":"234.5万"}],\n"posts":[{"author":"npc:NPC名","text":"微博正文(100字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝名/路人/其他NPC)","text":"评论内容(30字内)"}]},\n{"author":"marketing:账号名",...同上},\n{"author":"netizen:昵称",...同上}],\n"supertopics":[{"name":"超话名","type":"个人或cp","members":["成员名A","成员名B"],"readers":"1.2亿","postsN":"56.7万"}]}\n作者类型：npc:开头=NPC本人；marketing:=营销号；netizen:=普通网友。\ncp超话必须给members（恰好两位成员名，可以是NPC名或玩家名），cpf帖子要双人向、有真实饭圈味。${memBlock(memText)}` },
-      { role: 'user', content: `故事：${story.title}\n世界观：${(story.worldview.text || '').slice(0, 200)}\n角色（艺人/人物）：${artists}\n玩家：${player}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n${req}\n\n生成：6条热搜、8条微博（至少2条营销号+2条路人网友+2条NPC本人+1条工作室风）、4个超话（含至少1个CP超话）。` }
+      { role: 'user', content: `故事：${story.title}\n世界观：${(story.worldview.text || '').slice(0, 200)}\n角色（艺人/人物）：${artists}\n玩家：${player}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n${req}\n\n生成：5条热搜、5条微博（至少2条营销号+1条路人网友+2条NPC本人）、3个超话（含至少1个CP超话，须给members两位成员名）。` }
     ];
   }
   function weiboReplyPrompt(story, npc, postText, comment) {
@@ -326,7 +326,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
   function weiboPlayerPostPrompt(story, text, memText) {
     const fandom = !!story.settings.fandom;
     return [
-      { role: 'system', content: `【任务：微博玩家帖】玩家发了一条微博，生成评论区。只输出JSON数组（不要代码块）：[{"name":"评论者(可为角色表中的NPC名,或粉丝/路人/营销号昵称)","text":"评论(30字内,口吻有辨识度)"}]，2~4条。${fandom ? '娱乐圈背景：评论区分唯粉/cpf/黑粉/路人。' : ''}${memBlock(memText)}` },
+      { role: 'system', content: `【任务：微博玩家帖】玩家发了一条微博，生成评论区。只输出JSON数组（不要代码块）：[{"name":"评论者(可为角色表中的NPC名,或粉丝/路人/营销号昵称)","text":"评论(30字内,口吻有辨识度)","likes":数字}]，2~4条。${fandom ? '娱乐圈背景：评论区分唯粉/cpf/黑粉/路人。' : ''}${memBlock(memText)}` },
       { role: 'user', content: `玩家（${story.player.name || '我'}）的微博内容：${text}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n\n请生成评论。` }
     ];
   }
@@ -336,11 +336,18 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       { role: 'user', content: `你的朋友圈内容：${momentText}\n玩家(${story.player.name || '我'})评论：${comment}` }
     ];
   }
+  /* ---------- 朋友圈：楼中楼（玩家回复NPC评论，NPC再回应） ---------- */
+  function momentReplyToReplyPrompt(story, npc, momentText, npcComment, playerReply) {
+    return [
+      { role: 'system', content: '【任务：楼中楼回复】你在扮演互动小说NPC「' + npc.name + '」（' + (npc.identity || '') + '；性格：' + (npc.personality || '').slice(0, 40) + '；对玩家好感度' + (npc.affinity == null ? 50 : npc.affinity) + '/100）。玩家在你朋友圈评论下回复了你，请以角色身份再回应1条（35字内）。回应要贴合好感度：高好感可以亲近/调侃/关心，低好感保持距离或冷淡，负好感可以带刺。符合人设与当前剧情。只输出回复内容。' },
+      { role: 'user', content: `你的朋友圈：${momentText}\n你的评论：${npcComment}\n玩家（${story.player.name || '我'}）回复你：${playerReply}\n\n请回应。` }
+    ];
+  }
 
   window.PW.Prompts = {
     gmSystem, historyMessages, build, summaryPrompt, rosterBlock,
     worldviewPrompt, polishPrompt, npcGenPrompt,
     proactiveChatPrompt, phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt, weiboReplyPrompt,
-    hotDetailPrompt, supertopicPrompt, groupChatPrompt, momentsPlayerPostPrompt, weiboPlayerPostPrompt
+    hotDetailPrompt, supertopicPrompt, groupChatPrompt, momentsPlayerPostPrompt, weiboPlayerPostPrompt, momentReplyToReplyPrompt
   };
 })();
