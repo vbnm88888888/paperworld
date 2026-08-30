@@ -5,14 +5,23 @@ window.PW = window.PW || {};
     return (story.npcs || []).find(x => x.name === name) || null;
   }
 
-  /* 从共享记忆池检索相关剧情（四场景记忆互通） */
+  /* 从共享记忆池检索相关剧情（四场景记忆互通，统一走 App.memoryBlock） */
   async function memFor(query) {
-    if (!query || !PW.App || !PW.App.retrieveMemories) return '';
-    try {
-      const hits = await PW.App.retrieveMemories(query);
-      if (!hits || !hits.length) return '';
-      return hits.slice(0, 3).map(h => '· [' + (h.label || '记忆') + '] ' + String(h.rec.text || '').slice(0, 100)).join(' ｜ ');
-    } catch (e) { return ''; }
+    if (!query || !PW.App || !PW.App.memoryBlock) return '';
+    return PW.App.memoryBlock(query);
+  }
+
+  /* 宽松JSON解析：剥掉markdown代码块/前后杂质，兼容对象与数组 */
+  function parseJsonLoose(content) {
+    let t = String(content || '').trim();
+    const iArr = t.indexOf('['), iObj = t.indexOf('{');
+    let start = -1, endCh = null;
+    if (iArr >= 0 && (iObj < 0 || iArr < iObj)) { start = iArr; endCh = ']'; }
+    else if (iObj >= 0) { start = iObj; endCh = '}'; }
+    if (start < 0) throw new Error('AI 返回内容不是有效JSON');
+    const end = t.lastIndexOf(endCh);
+    if (end > start) t = t.slice(start, end + 1);
+    return JSON.parse(t);
   }
 
   /* ---------- 微信：玩家主动发 ---------- */
@@ -46,10 +55,7 @@ window.PW = window.PW || {};
       messages: PW.Prompts.proactiveChatPrompt(story, memText),
       stream: false, temperature: 1.3
     });
-    let text = (content || '').trim();
-    const m = text.match(/\{[\s\S]*\}/);
-    if (m) text = m[0];
-    const obj = JSON.parse(text); // 可能抛错，由调用方处理
+    const obj = parseJsonLoose(content); // 可能抛错，由调用方处理
     const npc = findNpc(story, obj.npc) || (story.npcs || []).filter(x => x.present !== false)[0];
     if (!npc) throw new Error('没有可用的NPC');
     const list = story.phone.chats[npc.id] || (story.phone.chats[npc.id] = []);
@@ -68,11 +74,8 @@ window.PW = window.PW || {};
   async function genMoments(story, n) {
     const memText = await memFor('朋友圈 动态 ' + (story.chat.summary || '').slice(0, 80));
     const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPrompt(story, n, memText), stream: false, temperature: 1.4 });
-    let text = (content || '').trim();
-    const m = text.match(/\[[\s\S]*\]/);
-    if (m) text = m[0];
     let arr;
-    try { arr = JSON.parse(text); } catch (e) { throw new Error('朋友圈内容解析失败，请重试'); }
+    try { arr = parseJsonLoose(content); } catch (e) { throw new Error('朋友圈内容解析失败，请重试'); }
     const created = [];
     arr.slice(0, 5).forEach(it => {
       const npc = findNpc(story, it.npc);
@@ -131,11 +134,7 @@ window.PW = window.PW || {};
   async function genWeibo(story) {
     const memText = await memFor('微博 热搜 舆论 ' + (story.chat.summary || '').slice(0, 80));
     const { content } = await PW.Api.chat({ messages: PW.Prompts.weiboPrompt(story, memText), stream: false, temperature: 1.4 });
-    let text = (content || '').trim();
-    const m = text.match(/\{[\s\S]*\}/);
-    if (m) text = m[0];
-    let obj;
-    try { obj = JSON.parse(text); } catch (e) { throw new Error('微博内容解析失败，请重试'); }
+    const obj = parseJsonLoose(content);
 
     const hot = (obj.hot || []).slice(0, 8).map((h, i) => ({
       rank: i + 1, text: String(h.text || '').slice(0, 28),
@@ -177,8 +176,16 @@ window.PW = window.PW || {};
 
     const supertopics = (obj.supertopics || []).slice(0, 6).map(t => {
       const type = /cp/i.test(String(t.type || '')) ? 'cp' : '个人';
+      const playerName = story.player.name || '我';
+      const members = (t.members || []).slice(0, 2).map(nm => {
+        nm = String(nm || '').trim();
+        if (!nm) return null;
+        if (nm === playerName) return 'player';
+        const npc = findNpc(story, nm);
+        return npc ? npc.id : nm;
+      }).filter(Boolean);
       return {
-        name: String(t.name || '').slice(0, 16), type,
+        name: String(t.name || '').slice(0, 16), type, members,
         readers: String(t.readers || (Math.random() * 3 + 0.2).toFixed(1) + '亿').slice(0, 8),
         postsN: String(t.postsN || (Math.random() * 90 + 5).toFixed(1) + '万').slice(0, 8),
         signed: false
@@ -239,11 +246,7 @@ window.PW = window.PW || {};
   async function hotDetail(story, hotText) {
     const memText = await memFor(hotText);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.hotDetailPrompt(story, hotText, memText), stream: false, temperature: 1.4 });
-    let text = (content || '').trim();
-    const m = text.match(/\[[\s\S]*\]/);
-    if (m) text = m[0];
-    let arr;
-    try { arr = JSON.parse(text); } catch (e) { throw new Error('解析失败，请重试'); }
+    const arr = parseJsonLoose(content);
     return arr.slice(0, 8).map(it => buildPost(story, it));
   }
 
@@ -251,11 +254,7 @@ window.PW = window.PW || {};
   async function supertopicFeed(story, cha) {
     const memText = await memFor('超话 ' + cha.name + ' ' + (story.chat.summary || '').slice(0, 60));
     const { content } = await PW.Api.chat({ messages: PW.Prompts.supertopicPrompt(story, cha, memText), stream: false, temperature: 1.4 });
-    let text = (content || '').trim();
-    const m = text.match(/\[[\s\S]*\]/);
-    if (m) text = m[0];
-    let arr;
-    try { arr = JSON.parse(text); } catch (e) { throw new Error('解析失败，请重试'); }
+    const arr = parseJsonLoose(content);
     return arr.slice(0, 8).map(it => buildPost(story, it));
   }
 

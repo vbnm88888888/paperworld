@@ -264,7 +264,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 - 超话：每位主要艺人一个个人超话（阅读量/帖子数要像真的），并且生成一个"玩家×某NPC"或"某NPC×某NPC"的CP超话；`
       : `微博内容与世界观和剧情呼应：NPC本人发言贴合人设，营销号/网友围绕剧情事件讨论，评论自然多样；超话按剧情里的话题生成；`;
     return [
-      { role: 'system', content: `【任务：微博】你是社交媒体内容生成器，为互动小说生成完整的微博生态。只输出JSON对象（不要代码块）：\n{"hot":[{"text":"热搜词条","tag":"沸|爆|热|新之一","heat":"234.5万"}],\n"posts":[{"author":"npc:NPC名","text":"微博正文(100字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝名/路人/其他NPC)","text":"评论内容(30字内)"}]},\n{"author":"marketing:账号名",...同上},\n{"author":"netizen:昵称",...同上}],\n"supertopics":[{"name":"超话名","type":"个人或cp","readers":"1.2亿","postsN":"56.7万"}]}\n作者类型：npc:开头=NPC本人；marketing:=营销号；netizen:=普通网友。${memBlock(memText)}` },
+      { role: 'system', content: `【任务：微博】你是社交媒体内容生成器，为互动小说生成完整的微博生态。只输出JSON对象（不要代码块）：\n{"hot":[{"text":"热搜词条","tag":"沸|爆|热|新之一","heat":"234.5万"}],\n"posts":[{"author":"npc:NPC名","text":"微博正文(100字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝名/路人/其他NPC)","text":"评论内容(30字内)"}]},\n{"author":"marketing:账号名",...同上},\n{"author":"netizen:昵称",...同上}],\n"supertopics":[{"name":"超话名","type":"个人或cp","members":["成员名A","成员名B"],"readers":"1.2亿","postsN":"56.7万"}]}\n作者类型：npc:开头=NPC本人；marketing:=营销号；netizen:=普通网友。\ncp超话必须给members（恰好两位成员名，可以是NPC名或玩家名），cpf帖子要双人向、有真实饭圈味。${memBlock(memText)}` },
       { role: 'user', content: `故事：${story.title}\n世界观：${(story.worldview.text || '').slice(0, 200)}\n角色（艺人/人物）：${artists}\n玩家：${player}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n${req}\n\n生成：6条热搜、8条微博（至少2条营销号+2条路人网友+2条NPC本人+1条工作室风）、4个超话（含至少1个CP超话）。` }
     ];
   }
@@ -283,15 +283,33 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n热搜词条：${hotText}\n\n生成与该词条相关的微博和评论（内容要与词条和剧情呼应）。` }
     ];
   }
+  /* 成员解析：'player' 或 npcId 或原始名字 → 描述文本 */
+  function chaMemberDesc(story, m) {
+    if (m === 'player') {
+      const p = story.player || {};
+      return (p.name || '玩家') + '（玩家角色；' + (p.persona || '').slice(0, 40) + '）';
+    }
+    const npc = (story.npcs || []).find(n => n.id === m);
+    if (npc) return npc.name + '（' + (npc.identity || '') + '；性格：' + (npc.personality || '').slice(0, 30) + '；好感度' + (npc.affinity == null ? 50 : npc.affinity) + '）';
+    return String(m);
+  }
   function supertopicPrompt(story, cha, memText) {
-    const isCp = cha.type === 'cp';
-    const artists = (story.npcs || []).filter(x => x.present !== false).map(x => `${x.name}（${x.identity || ''}）`).join('；');
-    const theme = isCp
-      ? `这是CP超话「${cha.name}」，生成cp粉的磕糖帖、分析帖、二创安利（口吻：cpf，甜蜜疯了但要真实）；`
-      : `这是个人超话「${cha.name}」，生成唯粉的应援帖、生图安利、日程打卡（口吻：唯粉，护短且热情）；`;
+    const members = (cha.members || []).map(m => chaMemberDesc(story, m));
+    let theme;
+    if (cha.type === 'cp') {
+      const pair = members.length >= 2 ? members[0] + ' × ' + members[1] : cha.name;
+      theme = '这是CP超话「' + cha.name + '」，CP为：' + pair + '。' + NL
+        + '生成真实微博cpf超话的双人向帖子流，要求：' + NL
+        + '1. 每条帖子必须同时提到两个人，围绕两人的互动写：同框细节分析、眼神拉丝解读、剧情嗑糖、二创脑洞、切片安利；' + NL
+        + '2. 口吻是真实cpf："家人们谁懂啊""锁死""kdl""嗑生嗑死""这个眼神我先磕为敬"，也可混少量理性分析帖与路人帖；' + NL
+        + '3. 结合近期剧情与两人好感度，糖里可以带刀。';
+    } else {
+      const who = members[0] || cha.name;
+      theme = '这是个人超话「' + cha.name + '」，主角是：' + who + '。生成唯粉超话的帖子流：应援打卡、生图安利、行程讨论、回忆杀长文，口吻是真实唯粉（护短热情，带数据组打投黑话）。';
+    }
     return [
-      { role: 'system', content: `【任务：超话详情】你是社交媒体内容生成器，生成超话内的帖子流。只输出JSON数组（不要代码块），每项：{"author":"netizen:粉丝昵称","text":"帖子(100字内,超话社区口吻,可带#超话名#)","likes":数字,"comments":[{"name":"回复者","text":"回复(30字内)"}]}。共4~6条。${theme}${memBlock(memText)}` },
-      { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：${(story.chat.summary || '').slice(0, 200) || '（刚开始）'}\n\n生成「${cha.name}」超话的帖子流。` }
+      { role: 'system', content: `【任务：超话详情】你是超话内容生成器，模拟真实微博超话社区。只输出JSON数组（不要代码块），每项：{"author":"netizen:粉丝昵称","text":"帖子(130字内,超话社区口吻,可带#超话名#)","likes":数字,"comments":[{"name":"回复者","text":"回复(30字内)"}]}。共4~6条。${theme}${memBlock(memText)}` },
+      { role: 'user', content: `故事：${story.title}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n\n生成「${cha.name}」超话的帖子流（内容要与剧情和人设呼应）。` }
     ];
   }
   /* ---------- 手机：朋友圈玩家发帖 ---------- */

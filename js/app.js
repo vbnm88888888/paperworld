@@ -56,7 +56,7 @@
         groupModal: { open: false, name: '', memberIds: [] },
         moCompose: '',
         wbCompose: '',
-        chaModal: { open: false, name: '', type: '个人' },
+        chaModal: { open: false, name: '', type: '个人', memberIds: [] },
         wxNpc: null,
         phoneInput: '',
         wxBusy: false, moBusy: false, wbBusy: false,
@@ -579,6 +579,15 @@
         if (!query || !this.mem.records.length) return [];
         const res = await this._doRetrieve(query);
         return res;
+      },
+      /* 统一记忆块格式化（手机各模块共用一个入口，保证格式一致） */
+      async memoryBlock(query) {
+        if (!query) return '';
+        try {
+          const hits = await this.retrieveMemories(query);
+          if (!hits || !hits.length) return '';
+          return hits.slice(0, 3).map(h => '· [' + (h.label || '记忆') + '] ' + String(h.rec.text || '').slice(0, 100)).join(' ｜ ');
+        } catch (e) { return ''; }
       },
       async _doRetrieve(q) {
         try {
@@ -1373,7 +1382,7 @@
         finally { this.wbDetailBusy = false; }
       },
       async openChaDetail(c) {
-        this.wbDetail = { title: c.name, type: c.type, readers: c.readers, postsN: c.postsN };
+        this.wbDetail = { title: c.name, type: c.type, readers: c.readers, postsN: c.postsN, members: c.members || [] };
         this.wbDetailKind = 'cha';
         this.wbDetailPosts = [];
         this.wbDetailBusy = true;
@@ -1401,16 +1410,43 @@
         catch (e) { this.showError(e); }
         finally { this.wbBusy = false; }
       },
-      openChaModal() { this.chaModal = { open: true, name: '', type: '个人' }; },
+      openChaModal() { this.chaModal = { open: true, name: '', type: '个人', memberIds: [] }; },
+      toggleChaMember(id) {
+        const arr = this.chaModal.memberIds;
+        const i = arr.indexOf(id);
+        if (i >= 0) { arr.splice(i, 1); return; }
+        if (this.chaModal.type === 'cp') {
+          arr.push(id);
+          while (arr.length > 2) arr.shift();
+        } else {
+          arr.length = 0; arr.push(id);
+        }
+      },
+      chaMemberName(m) {
+        if (m === 'player') return this.story.player.name || '我';
+        const n = this.npcById(m);
+        return n ? n.name : m;
+      },
+      chaSub(c) {
+        if (c.type === 'cp' && (c.members || []).length >= 2) {
+          return this.chaMemberName(c.members[0]) + ' × ' + this.chaMemberName(c.members[1]);
+        }
+        if ((c.members || []).length === 1) return this.chaMemberName(c.members[0]) + '的超话';
+        return c.readers + '阅读 · ' + c.postsN + '帖子';
+      },
       createCha() {
         const name = (this.chaModal.name || '').trim();
         if (!name) { this.toast('超话得有个名字', '🙃'); return; }
-        this.story.phone.weibo.supertopics.unshift({
-          name: name.slice(0, 16), type: this.chaModal.type,
+        if (this.chaModal.type === 'cp' && this.chaModal.memberIds.length !== 2) { this.toast('CP超话要选恰好两位成员', '💞'); return; }
+        const cha = {
+          id: PW.Store.uid('cha'), name: name.slice(0, 16), type: this.chaModal.type,
+          members: this.chaModal.memberIds.slice(),
           readers: '0.1亿', postsN: '0帖', signed: true
-        });
+        };
+        this.story.phone.weibo.supertopics.unshift(cha);
         this.chaModal.open = false;
         this.toast('超话「' + name + '」已创建', '⭐');
+        this.openChaDetail(cha);
       },
 
       /* ---------- Tab 切换 ---------- */
