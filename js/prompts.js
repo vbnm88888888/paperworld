@@ -244,10 +244,10 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     const cast = (story.npcs || []).filter(x => x.present !== false)
       .map(x => `${x.name}（${x.identity || ''}，性格：${(x.personality || '').slice(0, 30)}）`).join('；');
     const flavor = fandom
-      ? '这是娱乐圈故事：动态要带饭圈生态感（剧组日常、炒作、内涵、粉丝评论用唯粉/cpf/黑粉口吻，可带#话题#）。'
+      ? '角色从事娱乐圈相关职业时，动态可涉及剧组日常、作品、通告等职业话题。'
       : '动态符合人设与近况，可带emoji。';
     return [
-      { role: 'system', content: `【任务：朋友圈】你是社交媒体内容生成器，为互动小说里的NPC们生成微信朋友圈动态。只输出JSON数组（不要代码块），每项：{"npc":"NPC名","text":"动态内容(80字内)","likes":数字,"comments":[{"name":"名字(NPC或粉丝)","text":"评论(30字内)"}]}。${flavor}` },
+      { role: 'system', content: `【任务：朋友圈】你是社交媒体内容生成器，为互动小说里的NPC们生成微信朋友圈动态。只输出JSON数组（不要代码块），每项：{"npc":"NPC名","text":"动态内容(80字内)","likes":数字,"comments":[{"name":"名字(NPC或朋友)","text":"评论(30字内)"}]}。${flavor}\n⚠️场景隔离（必须遵守）：这是微信朋友圈——动态和评论都是朋友间的日常分享，口吻亲密随意；严禁出现粉丝/cpf/唯粉/黑粉/营销号/热搜/超话等微博饭圈词汇，严禁写成公开微博体。` },
       { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n最近剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成${n}条与剧情有微妙关联的朋友圈动态（可互相评论）。` },
     ].map(m => m.role === 'system' ? { role: 'system', content: m.content + memBlock(memText) } : m);
   }

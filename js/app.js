@@ -553,6 +553,7 @@
         const recs = items.map(it => ({
           id: PW.Store.uid('mem'), storyId: story.id,
           kind: it.kind || 'ai', speaker: it.speaker || '', text: String(it.text || '').slice(0, 800),
+          scope: it.scope || 'plot',
           ts: Date.now(), chapter, vec: null
         }));
         try { await PW.Store.memPut(recs); } catch (e) { console.warn('mem put fail', e); }
@@ -575,24 +576,31 @@
         if (!q) return [];
         return this._doRetrieve(q);
       },
-      /* 共享记忆检索（剧情/微信/微博/朋友圈四场景互通） */
-      async retrieveMemories(query) {
-        if (!query || !this.mem.records.length) return [];
-        const res = await this._doRetrieve(query);
-        return res;
+      /* 共享记忆检索（四场景互通，但按端隔离：微信不见微博舆论） */
+      async retrieveMemories(query, scopes) {
+        if (!query) return [];
+        var pool = this.mem.records;
+        if (scopes && scopes.length) {
+          /* 端隔离：剧情记忆(plot)对所有端可见，其余只允许本端的记忆 */
+          pool = pool.filter(r => !r.scope || r.scope === 'plot' || scopes.indexOf(r.scope) >= 0);
+        }
+        if (!pool.length) return [];
+        return this._doRetrieve(query, pool);
       },
       /* 统一记忆块格式化（手机各模块共用一个入口，保证格式一致） */
-      async memoryBlock(query) {
+      async memoryBlock(query, scopes) {
         if (!query) return '';
         try {
-          const hits = await this.retrieveMemories(query);
+          const hits = await this.retrieveMemories(query, scopes);
           if (!hits || !hits.length) return '';
           return hits.slice(0, 3).map(h => '· [' + (h.label || '记忆') + '] ' + String(h.rec.text || '').slice(0, 100)).join(' ｜ ');
         } catch (e) { return ''; }
       },
-      async _doRetrieve(q) {
+      async _doRetrieve(q, pool) {
         try {
-          const res = await PW.Rag.search(this.story.id, this.mem.records, q, this.settings.topK, this.settings.memoryMode === 'semantic');
+          const recs = pool || this.mem.records;
+          if (!recs.length) return [];
+          const res = await PW.Rag.search(this.story.id, recs, q, this.settings.topK, this.settings.memoryMode === 'semantic');
           return res.hits.map(h => ({ rec: h.rec, label: `第${h.rec.chapter || 1}节·${this.memKindName(h.rec.kind)}${h.rec.speaker ? '·' + h.rec.speaker : ''}` }));
         } catch (e) { console.warn('retrieve fail', e); return []; }
       },

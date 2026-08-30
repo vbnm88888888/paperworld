@@ -6,9 +6,9 @@ window.PW = window.PW || {};
   }
 
   /* 从共享记忆池检索相关剧情（四场景记忆互通，统一走 App.memoryBlock） */
-  async function memFor(query) {
+  async function memFor(query, scopes) {
     if (!query || !PW.App || !PW.App.memoryBlock) return '';
-    return PW.App.memoryBlock(query);
+    return PW.App.memoryBlock(query, scopes);
   }
 
   /* 宽松JSON解析：剥掉markdown代码块/前后杂质，兼容对象与数组 */
@@ -29,7 +29,7 @@ window.PW = window.PW || {};
     const chats = story.phone.chats;
     const list = chats[npc.id] || (chats[npc.id] = []);
     list.push({ id: PW.Store.uid('w'), role: 'me', text, ts: Date.now() });
-    const memText = await memFor(npc.name + ' ' + text);
+    const memText = await memFor(npc.name + ' ' + text, ['wechat']);
     const { content } = await PW.Api.chat({
       messages: PW.Prompts.phoneChatMessages(story, npc, text, list, memText),
       stream: false, temperature: 1.2
@@ -42,15 +42,15 @@ window.PW = window.PW || {};
     const note = `📱 微信 · ${npc.name}：${text.length > 24 ? text.slice(0, 24) + '…' : text}`;
     story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: note, ts: Date.now() });
     await PW.App.addMemories(story, [
-      { kind: 'phone', speaker: story.player.name, text: `（微信上玩家对${npc.name}说）${text}` },
-      { kind: 'phone', speaker: npc.name, text: `（微信上${npc.name}回复玩家）${replies.map(r => r.text).join(' / ')}` }
+      { kind: 'phone', scope: 'wechat', speaker: story.player.name, text: `（微信上玩家对${npc.name}说）${text}` },
+      { kind: 'phone', scope: 'wechat', speaker: npc.name, text: `（微信上${npc.name}回复玩家）${replies.map(r => r.text).join(' / ')}` }
     ]);
     return { replies };
   }
 
   /* ---------- 微信：NPC主动发消息 ---------- */
   async function proactiveWechat(story) {
-    const memText = await memFor('微信 主动联系 ' + (story.chat.summary || '').slice(0, 80));
+    const memText = await memFor('微信 主动联系 ' + (story.chat.summary || '').slice(0, 80), ['wechat']);
     const { content } = await PW.Api.chat({
       messages: PW.Prompts.proactiveChatPrompt(story, memText),
       stream: false, temperature: 1.3
@@ -65,7 +65,7 @@ window.PW = window.PW || {};
     list.push(...msgs);
     story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 微信 · ${npc.name} 主动发来消息`, ts: Date.now() });
     await PW.App.addMemories(story, [
-      { kind: 'phone', speaker: npc.name, text: `（${npc.name}主动在微信上发来）${msgs.map(x => x.text).join(' / ')}${obj.why ? '（' + obj.why + '）' : ''}` }
+      { kind: 'phone', scope: 'wechat', speaker: npc.name, text: `（${npc.name}主动在微信上发来）${msgs.map(x => x.text).join(' / ')}${obj.why ? '（' + obj.why + '）' : ''}` }
     ]);
     return { npc, msgs };
   }
@@ -74,7 +74,7 @@ window.PW = window.PW || {};
   async function genMoments(story, n) {
     /* 刷新即清掉玩家自己的旧帖子（按用户习惯：刷新=看新内容） */
     story.phone.moments = story.phone.moments.filter(m => !m.mine);
-    const memText = await memFor('朋友圈 动态 ' + (story.chat.summary || '').slice(0, 80));
+    const memText = await memFor('朋友圈 动态 ' + (story.chat.summary || '').slice(0, 80), ['moments']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPrompt(story, n, memText), stream: false, temperature: 1.4 });
     let arr;
     try { arr = parseJsonLoose(content); } catch (e) { throw new Error('朋友圈内容解析失败，请重试'); }
@@ -99,7 +99,7 @@ window.PW = window.PW || {};
     if (story.phone.moments.length > 30) story.phone.moments.length = 30;
     if (created.length) {
       story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 朋友圈更新了（${created.map(c => c.name).join('、')}）`, ts: Date.now() });
-      await PW.App.addMemories(story, [{ kind: 'phone', speaker: '朋友圈', text: 'NPC朋友圈动态：' + created.map(c => `${c.name}说「${c.text}」`).join('；') }]);
+      await PW.App.addMemories(story, [{ kind: 'phone', scope: 'moments', speaker: '朋友圈', text: 'NPC朋友圈动态：' + created.map(c => `${c.name}说「${c.text}」`).join('；') }]);
     }
     return created;
   }
@@ -111,7 +111,7 @@ window.PW = window.PW || {};
       text: String(text).slice(0, 200), ts: Date.now(), likes: 0, likedByMe: false, comments: []
     };
     story.phone.moments.unshift(mo);
-    const memText = await memFor('朋友圈 ' + text);
+    const memText = await memFor('朋友圈 ' + text, ['moments']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPlayerPostPrompt(story, text, memText), stream: false, temperature: 1.2 });
     let t = (content || '').trim();
     const mm = t.match(/\[[\s\S]*\]/);
@@ -128,14 +128,14 @@ window.PW = window.PW || {};
     } catch (e) { /* 评论解析失败不影响发帖 */ }
     story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 你发了一条朋友圈`, ts: Date.now() });
     await PW.App.addMemories(story, [
-      { kind: 'phone', speaker: story.player.name, text: `（玩家发朋友圈）${text}` + (mo.comments.length ? `；评论：${mo.comments.map(c => `${c.name}说「${c.text}」`).join('、')}` : '') }
+      { kind: 'phone', scope: 'moments', speaker: story.player.name, text: `（玩家发朋友圈）${text}` + (mo.comments.length ? `；评论：${mo.comments.map(c => `${c.name}说「${c.text}」`).join('、')}` : '') }
     ]);
     return mo;
   }
 
   /* ---------- 微博（饭圈生态） ---------- */
   async function genWeibo(story) {
-    const memText = await memFor('微博 热搜 舆论 ' + (story.chat.summary || '').slice(0, 80));
+    const memText = await memFor('微博 热搜 舆论 ' + (story.chat.summary || '').slice(0, 80), ['weibo']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.weiboPrompt(story, memText), stream: false, temperature: 1.4 });
     const obj = parseJsonLoose(content);
 
@@ -201,7 +201,7 @@ window.PW = window.PW || {};
     /* 微博内容入库共享记忆：热搜+帖子摘要（四端互通，剧情/微信可引用舆论动向） */
     if (posts.length || hot.length) {
       const digest = (hot.slice(0, 3).map(h => '#' + h.text).join(' ') || '') + '；帖子：' + posts.slice(0, 5).map(p => `${p.name}说「${p.text.slice(0, 50)}」`).join('；');
-      await PW.App.addMemories(story, [{ kind: 'phone', speaker: '微博', text: '微博舆论动态：' + digest }]);
+      await PW.App.addMemories(story, [{ kind: 'phone', scope: 'weibo', speaker: '微博', text: '微博舆论动态：' + digest }]);
     }
     return { hot, posts, supertopics };
   }
@@ -226,7 +226,7 @@ window.PW = window.PW || {};
       } catch (e) { /* NPC回复失败不影响玩家回复 */ }
     }
     await PW.App.addMemories(story, [
-      { kind: 'phone', speaker: story.player.name, text: `（朋友圈楼中楼：玩家回复${comment.name}的评论「${comment.text}」说）${text}` + (npcReply ? `；${npc.name}回应「${npcReply.text}」` : '') }
+      { kind: 'phone', scope: 'moments', speaker: story.player.name, text: `（朋友圈楼中楼：玩家回复${comment.name}的评论「${comment.text}」说）${text}` + (npcReply ? `；${npc.name}回应「${npcReply.text}」` : '') }
     ]);
     return npcReply;
   }
@@ -240,7 +240,7 @@ window.PW = window.PW || {};
       likes: 0, reposts: 0, likedByMe: false, comments: [], mine: true
     };
     story.phone.weibo.posts.unshift(post);
-    const memText = await memFor('微博 ' + text);
+    const memText = await memFor('微博 ' + text, ['weibo']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.weiboPlayerPostPrompt(story, text, memText), stream: false, temperature: 1.2 });
     let t = (content || '').trim();
     const mm = t.match(/\[[\s\S]*\]/);
@@ -258,7 +258,7 @@ window.PW = window.PW || {};
     } catch (e) { /* 评论解析失败不影响发帖 */ }
     story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 你发了一条微博`, ts: Date.now() });
     await PW.App.addMemories(story, [
-      { kind: 'phone', speaker: story.player.name, text: `（玩家发微博）${text}` + (post.comments.length ? `；评论：${post.comments.map(c => `${c.name}说「${c.text}」`).join('、')}` : '') }
+      { kind: 'phone', scope: 'weibo', speaker: story.player.name, text: `（玩家发微博）${text}` + (post.comments.length ? `；评论：${post.comments.map(c => `${c.name}说「${c.text}」`).join('、')}` : '') }
     ]);
     return post;
   }
@@ -267,6 +267,8 @@ window.PW = window.PW || {};
   async function commentOnPost(story, post, text) {
     post.comments.push({ id: PW.Store.uid('c'), name: story.player.name || '我', text, mine: true });
     post.commentsN = (post.commentsN || post.comments.length) + 0;
+    const scope = post.authorType != null ? 'weibo' : 'moments';
+    await PW.App.addMemories(story, [{ kind: 'phone', scope, speaker: story.player.name, text: `（${scope === 'weibo' ? '微博评论' : '朋友圈评论'}：玩家在${post.name}的帖子下说）${text}` }]);
     if (post.authorType !== 'npc' || !post.npcId) return null;
     const npc = (story.npcs || []).find(x => x.id === post.npcId);
     if (!npc) return null;
@@ -278,7 +280,7 @@ window.PW = window.PW || {};
 
   /* ---------- 微博：热搜词条详情 ---------- */
   async function hotDetail(story, hotText) {
-    const memText = await memFor(hotText);
+    const memText = await memFor(hotText, ['weibo']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.hotDetailPrompt(story, hotText, memText), stream: false, temperature: 1.4 });
     const arr = parseJsonLoose(content);
     return arr.slice(0, 8).map(it => buildPost(story, it));
@@ -286,7 +288,7 @@ window.PW = window.PW || {};
 
   /* ---------- 微博：超话帖子流 ---------- */
   async function supertopicFeed(story, cha) {
-    const memText = await memFor('超话 ' + cha.name + ' ' + (story.chat.summary || '').slice(0, 60));
+    const memText = await memFor('超话 ' + cha.name + ' ' + (story.chat.summary || '').slice(0, 60), ['weibo']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.supertopicPrompt(story, cha, memText), stream: false, temperature: 1.4 });
     const arr = parseJsonLoose(content);
     return arr.slice(0, 8).map(it => buildPost(story, it));
@@ -326,7 +328,7 @@ window.PW = window.PW || {};
   async function groupSend(story, group, text) {
     const list = story.phone.chats[group.id] || (story.phone.chats[group.id] = []);
     list.push({ id: PW.Store.uid('w'), role: 'me', text, ts: Date.now() });
-    const memText = await memFor('群聊 ' + group.name + ' ' + text);
+    const memText = await memFor('群聊 ' + group.name + ' ' + text, ['wechat']);
     const { content } = await PW.Api.chat({
       messages: PW.Prompts.groupChatPrompt(story, group, text, list, memText),
       stream: false, temperature: 1.3
@@ -345,8 +347,8 @@ window.PW = window.PW || {};
     list.push(...replies);
     story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 微信群「${group.name}」：${text.length > 20 ? text.slice(0, 20) + '…' : text}`, ts: Date.now() });
     await PW.App.addMemories(story, [
-      { kind: 'phone', speaker: story.player.name, text: `（微信群「${group.name}」里玩家说）${text}` },
-      { kind: 'phone', speaker: '群聊', text: `（群里回复）${replies.map(r => `${r.name}：${r.text}`).join(' / ')}` }
+      { kind: 'phone', scope: 'wechat', speaker: story.player.name, text: `（微信群「${group.name}」里玩家说）${text}` },
+      { kind: 'phone', scope: 'wechat', speaker: '群聊', text: `（群里回复）${replies.map(r => `${r.name}：${r.text}`).join(' / ')}` }
     ]);
     return { replies };
   }
