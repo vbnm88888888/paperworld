@@ -89,10 +89,11 @@
               <template v-if="m.kind==='me'">
                 <div class="msg me"><div class="bubble">{{ m.text }}</div></div>
               </template>
-              <!-- GM 回复：结构化卡片渲染 -->
+              <!-- GM 回复：自定义格式=整块Markdown文档；普通模式=旁白+对话气泡 -->
               <template v-else-if="m.kind==='ai'">
                 <template v-for="(sec, si) in aiBlocks(m)" :key="si">
-                  <template v-if="sec.type==='main'">
+                  <div v-if="sec.type==='doc'" class="md-doc" v-html="sec.html"></div>
+                  <template v-else>
                     <template v-for="(b, bi) in sec.blocks" :key="bi">
                       <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
                       <div v-else-if="b.type==='say'" class="say">
@@ -108,37 +109,6 @@
                       <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
                     </template>
                   </template>
-                  <div v-else-if="sec.type==='time'" class="fmt-time" v-html="'🕒 ' + md(fmtText(sec))"></div>
-                  <div v-else-if="sec.type==='scene'" class="fmt-scene" v-html="md(fmtText(sec))"></div>
-                  <div v-else-if="sec.type==='quote'" class="fmt-quote" :class="'q-' + sec.sub">
-                    <div class="fmt-quote-title" v-html="md(quoteParts(sec).title)"></div>
-                    <div class="fmt-quote-body">
-                      <div v-for="(l, li) in quoteParts(sec).lines" :key="li" :class="{ 'fmt-done': /✅|☑/.test(l) }" v-html="md(l)"></div>
-                    </div>
-                  </div>
-                  <div v-else-if="sec.type==='cast'" class="fmt-cast">
-                    <div class="fmt-cast-title">👥 在场人员动向</div>
-                    <div class="fmt-cast-item" v-for="(c, ci) in castLines(sec)" :key="ci">
-                      <b v-if="c.name">{{ c.name }}</b><span v-html="md(c.desc)"></span>
-                    </div>
-                  </div>
-                  <div v-else-if="sec.type==='aff'" class="fmt-aff">
-                    <div class="fmt-cast-title">💗 好感度进度</div>
-                    <div class="fmt-aff-row" v-for="(a, ai2) in affLines(sec)" :key="ai2">
-                      <span class="fan">{{ a.name }}</span>
-                      <div class="abar"><i :style="affBarStyle(a.value)"></i><span class="zero"></span></div>
-                      <span class="fav">{{ a.value }}%</span>
-                      <span class="fas" v-if="a.status">{{ a.status }}</span>
-                    </div>
-                  </div>
-                  <div v-else-if="sec.type==='aside'" class="fmt-aside">
-                    <div class="fmt-cast-title">📝 旁白</div>
-                    <div v-for="(l, li) in sec.lines" :key="li" v-html="md(l)"></div>
-                  </div>
-                  <div v-else-if="sec.type==='psycho'" class="fmt-psycho">
-                    <div class="fmt-cast-title">💭 心理活动</div>
-                    <div class="fmt-psycho-line" v-for="(l, li) in sec.lines" :key="li" v-html="md(l)"></div>
-                  </div>
                 </template>
                 <div class="choices" v-if="m.choices && !m.choicesUsed">
                   <button class="choice" v-for="(c, ci) in m.choices" :key="ci" @click="useChoice(m, ci)">
@@ -161,7 +131,8 @@
             <!-- 流式输出中 -->
             <div class="msg" v-if="busy">
               <template v-for="(sec, si) in streamBlocks" :key="'s'+si">
-                <template v-if="sec.type==='main'">
+                <div v-if="sec.type==='doc'" class="md-doc" v-html="sec.html"></div>
+                <template v-else>
                   <template v-for="(b, bi) in sec.blocks" :key="bi">
                     <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span><span v-if="si===streamBlocks.length-1 && bi===sec.blocks.length-1" class="cursor-blink"></span></div>
                     <div v-else-if="b.type==='say'" class="say">
@@ -176,37 +147,6 @@
                     <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
                   </template>
                 </template>
-                <div v-else-if="sec.type==='time'" class="fmt-time" v-html="'🕒 ' + md(fmtText(sec))"></div>
-                <div v-else-if="sec.type==='scene'" class="fmt-scene" v-html="md(fmtText(sec))"></div>
-                <div v-else-if="sec.type==='quote'" class="fmt-quote" :class="'q-' + sec.sub">
-                  <div class="fmt-quote-title" v-html="md(quoteParts(sec).title)"></div>
-                  <div class="fmt-quote-body">
-                    <div v-for="(l, li) in quoteParts(sec).lines" :key="li" :class="{ 'fmt-done': /✅|☑/.test(l) }" v-html="md(l)"></div>
-                  </div>
-                </div>
-                <div v-else-if="sec.type==='cast'" class="fmt-cast">
-                  <div class="fmt-cast-title">👥 在场人员动向</div>
-                  <div class="fmt-cast-item" v-for="(c, ci) in castLines(sec)" :key="ci">
-                    <b v-if="c.name">{{ c.name }}</b><span v-html="md(c.desc)"></span>
-                  </div>
-                </div>
-                <div v-else-if="sec.type==='aff'" class="fmt-aff">
-                  <div class="fmt-cast-title">💗 好感度进度</div>
-                  <div class="fmt-aff-row" v-for="(a, ai2) in affLines(sec)" :key="ai2">
-                    <span class="fan">{{ a.name }}</span>
-                    <div class="abar"><i :style="affBarStyle(a.value)"></i><span class="zero"></span></div>
-                    <span class="fav">{{ a.value }}%</span>
-                    <span class="fas" v-if="a.status">{{ a.status }}</span>
-                  </div>
-                </div>
-                <div v-else-if="sec.type==='aside'" class="fmt-aside">
-                  <div class="fmt-cast-title">📝 旁白</div>
-                  <div v-for="(l, li) in sec.lines" :key="li" v-html="md(l)"></div>
-                </div>
-                <div v-else-if="sec.type==='psycho'" class="fmt-psycho">
-                  <div class="fmt-cast-title">💭 心理活动</div>
-                  <div class="fmt-psycho-line" v-for="(l, li) in sec.lines" :key="li" v-html="md(l)"></div>
-                </div>
               </template>
               <template v-if="!streamText">
                 <div class="say"><div class="avatar"><img :src="gmAvatar" alt=""></div>
@@ -279,7 +219,7 @@
               </div>
             </div>
             <div class="set-row">
-              <div class="s-label"><b>九段式输出</b><span>每次回复强制生成9张卡片：时间/场景/地图/在场人员/正文/日程/探索/旁白/心理</span></div>
+              <div class="s-label"><b>自定义输出格式</b><span>开启后在下方编写格式提示词，AI每次回复严格按你的格式生成（Markdown自动渲染）</span></div>
               <div class="switch" :class="{on: story.useNineFormat}" @click="story.useNineFormat=!story.useNineFormat"></div>
             </div>
             <div class="set-row">
@@ -299,20 +239,14 @@
           <textarea class="inp world-text" v-model="story.worldview.text" placeholder="这个世界是什么样的？时代、地点、规则、暗流……"></textarea>
           <div class="tok-est">≈ {{ worldTokens }} tokens</div>
 
-          <!-- 九段式格式设置（每段可编辑） -->
-          <div class="sec-title" v-if="story.useNineFormat">九段式格式设置 <span class="line"></span>
-            <button class="btn sm ghost" @click="resetNineFmt">恢复全部默认</button>
+          <!-- 自定义输出格式（自由编辑） -->
+          <div class="sec-title" v-if="story.useNineFormat">自定义输出格式 <span class="line"></span>
+            <button class="btn sm" @click="insertNineTemplate">📋 插入九段式模板</button>
           </div>
-          <div class="nf-wrap" v-if="story.useNineFormat">
-            <div class="nf-item" v-for="p in nineParts" :key="p.key">
-              <div class="nf-head" @click="nineOpen[p.key]=!nineOpen[p.key]">
-                <span>{{ nineOpen[p.key] ? '▾' : '▸' }} {{ p.name }}</span>
-                <button class="btn sm ghost" v-if="story.nineFmt[p.key] && story.nineFmt[p.key].trim()" @click.stop="resetNineOne(p.key)">已自定义 · 恢复默认</button>
-              </div>
-              <textarea class="inp nf-editor" v-if="nineOpen[p.key]" rows="6" v-model="story.nineFmt[p.key]" :placeholder="nineDefault(p.key).slice(0, 60) + '……（留空使用默认规范）'"></textarea>
-            </div>
-            <div style="font-size:11.5px;color:var(--ink3);margin-top:4px">
-              9 个部分输出必须齐全、按序，可连贯书写不强制分段；点标题展开编辑该段的提示词，留空使用默认。
+          <div v-if="story.useNineFormat" style="margin-bottom:14px">
+            <textarea class="inp nf-editor" style="min-height:280px" v-model="story.outputFormat" placeholder="自由编写输出格式提示词：规定AI每次回复生成哪些部分、每部分怎么写、什么格式……留空则不附加格式"></textarea>
+            <div style="font-size:11.5px;color:var(--ink3)">
+              开关开启后此提示词以最高优先级注入，随故事保存。支持Markdown（***粗斜体***、**粗体**、> 引用块），剧情区会自动排版渲染。
             </div>
           </div>
 

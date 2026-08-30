@@ -54,7 +54,6 @@
         wxGroup: null,
         groupBusy: false,
         groupModal: { open: false, name: '', memberIds: [] },
-        nineOpen: {},
         wxNpc: null,
         phoneInput: '',
         wxBusy: false, moBusy: false, wbBusy: false,
@@ -73,7 +72,6 @@
         return [{ key: 'blank', name: '自由自定', emoji: '📖' }];
       },
       modelList() { return PW.CONFIG.MODELS; },
-      nineParts() { return PW.NINE_PARTS; },
       allModels() {
         const custom = (this.settings.customModels || []).map(id => ({ id, name: id + ' · 自定义' }));
         return PW.CONFIG.MODELS.concat(custom);
@@ -118,7 +116,13 @@
       wizPlayerAv() { return this.avPair(this.wizard.player); },
       drawerAv() { return this.avPair(this.drawer.form); },
       drawerGenreKey() { return this.drawer.ctx === 'story' ? (this.story ? this.story.genreKey : 'blank') : this.wizard.genreKey; },
-      streamBlocks() { return this.parseStructured(this.stripLive(this.streamText)); },
+      streamBlocks() {
+        const stripped = this.stripLive(this.streamText);
+        if (this.story && this.story.useNineFormat) {
+          return [{ type: 'doc', html: this.mdDoc(stripped) }];
+        }
+        return [{ type: 'main', blocks: this.parseAiBlocks(stripped) }];
+      },
       memRecent() { return this.mem.records.slice(-40).reverse(); },
       clock() {
         const d = new Date();
@@ -244,6 +248,7 @@
         t = t.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
         t = t.replace(/\*([^*\n]+)\*/g, '<i>$1</i>');
         t = t.replace(/~~([^~]+)~~/g, '<s>$1</s>');
+        t = t.replace(/\*/g, '');
         return t;
       },
       /* ---------- 剧情图标动态化 ---------- */
@@ -327,6 +332,7 @@
         if (!Array.isArray(st.phone.weibo.supertopics)) st.phone.weibo.supertopics = [];
         if (!Array.isArray(st.phone.groups)) st.phone.groups = [];
         if (st.settings.styleNote == null) st.settings.styleNote = '';
+        if (st.outputFormat == null) st.outputFormat = '';
         if (!st.nineFmt) st.nineFmt = {};
         if (st.useNineFormat == null) st.useNineFormat = false;
         if (st.settings.fandom == null) st.settings.fandom = (st.genreKey === 'entertainment');
@@ -721,9 +727,61 @@
       },
       aiBlocks(m) {
         if (!this._aiCache.has(m.id)) {
-          this._aiCache.set(m.id, this.parseStructured(m.text));
+          if (this.story && this.story.useNineFormat) {
+            this._aiCache.set(m.id, [{ type: 'doc', html: this.mdDoc(this.stripLive(m.text)) }]);
+          } else {
+            this._aiCache.set(m.id, [{ type: 'main', blocks: this.parseAiBlocks(m.text) }]);
+          }
         }
         return this._aiCache.get(m.id);
+      },
+      /* 整块Markdown文档渲染（自定义输出格式模式） */
+      mdDoc(text) {
+        const inline = (s) => {
+          let t = String(s == null ? '' : s);
+          t = t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          t = t.replace(/\*\*\*([^*]+)\*\*\*/g, '<b><i>$1</i></b>');
+          t = t.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+          t = t.replace(/\*([^*\n]+)\*/g, '<i>$1</i>');
+          t = t.replace(/~~([^~]+)~~/g, '<s>$1</s>');
+          t = t.replace(/\*/g, '');
+          return t;
+        };
+        const lines = String(text || '').split('\n');
+        let html = '', para = [], quote = [];
+        const flush = () => {
+          if (quote.length) {
+            html += '<div class="md-quote">' + quote.map(l => '<div class="md-quote-line">' + inline(l) + '</div>').join('') + '</div>';
+            quote = [];
+          }
+          if (para.length) {
+            html += '<div class="md-p">' + para.map(p => '<div class="md-line ' + p.cls + '">' + inline(p.text) + '</div>').join('') + '</div>';
+            para = [];
+          }
+        };
+        for (const raw of lines) {
+          const l = raw.trim();
+          if (!l) { flush(); continue; }
+          if (/^[-—_=∙•\s]{4,}$/.test(l)) { flush(); html += '<hr>'; continue; }
+          if (l.startsWith('>')) { if (para.length) flush(); quote.push(l.replace(/^>\s?/, '')); continue; }
+          if (/^#{1,6}\s/.test(l)) { flush(); html += '<div class="md-h">' + inline(l.replace(/^#+\s*/, '')) + '</div>'; continue; }
+          const cls = /✅|☑|^\[\s*x?\s*\]/i.test(l) ? 'md-check' : (/🔹/.test(l) ? 'md-aff-line' : '');
+          para.push({ text: l, cls });
+        }
+        flush();
+        return html;
+      },
+      /* 整段文本中的好感度行同步（自定义格式模式） */
+      syncAffFromText(text) {
+        const re = /🔹\s*([^：:\s|]{1,12})[：:]\s*好感度\s*(-?\d+)\s*%?/g;
+        let m;
+        while ((m = re.exec(text || '')) !== null) {
+          const npc = this.npcByName(m[1].trim());
+          if (npc) {
+            const v = Math.max(-100, Math.min(100, parseInt(m[2], 10) || 0));
+            if (npc.affinity !== v) npc.affinity = v;
+          }
+        }
       },
       /* ---- 结构化格式解析（9条格式 → 卡片；无标记时整体作为正文） ---- */
       parseStructured(text) {
@@ -792,11 +850,10 @@
         return sec.lines.join('  ');
       },
       nineDefault(key) { return (PW.NINE_DEFAULTS[key] || '').slice(0, 60); },
-      resetNineFmt() {
-        this.story.nineFmt = {};
-        this.toast('九段式规范已恢复默认', '🔄');
+      insertNineTemplate() {
+        this.story.outputFormat = PW.NINE_TEMPLATE;
+        this.toast('已插入九段式模板，可自由改写', '📋');
       },
-      resetNineOne(key) { this.story.nineFmt[key] = ''; },
       castLines(sec) {
         return sec.lines.filter(l => l.trim() && !/^\[/.test(l.trim())).map(l => {
           const m = l.replace(/^[*\s]+|[*\s]+$/g, '').match(/^([^：:]{1,12})[：:]\s*([\s\S]+)$/);
@@ -940,9 +997,10 @@
         const sc = this.stripChoices(phone.clean);
         const msg = { id: PW.Store.uid('m'), kind: 'ai', text: sc.text.trim(), raw, ts: Date.now(), choices: sc.choices, choicesUsed: false };
         story.chat.messages.push(msg);
-        this._aiCache.set(msg.id, this.parseStructured(msg.text));
-        /* 同步9条格式中的好感度到NPC数据 */
+        this._aiCache.set(msg.id, this.aiBlocks(msg));
+        /* 同步好感度（卡片模式/自定义格式模式通用） */
         this._aiCache.get(msg.id).forEach(sec => { if (sec.type === 'aff') this.syncAffFromSection(sec); });
+        this.syncAffFromText(raw);
         this.addMemories(story, [{ kind: 'ai', speaker: 'GM', text: raw.slice(0, 800) }]);
         this.routePhoneMarks(phone.marks);
         const fx = PW.Affinity.apply(story, { affs: parsed.affs, states: parsed.states });

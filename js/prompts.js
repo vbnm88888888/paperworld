@@ -10,18 +10,6 @@ window.PW = window.PW || {};
   const NL = String.fromCharCode(10);
   const fmtDate = ts => new Date(ts).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 
-  /* 九段式规范：按段拼接（用户自定义段优先，默认段兜底） */
-  function buildNineSpec(story) {
-    const fmt = story.nineFmt || {};
-    let spec = '【九段式输出格式（绝对命令）】每次回复必须包含以下9个部分，按顺序输出，缺一不可；各部分之间可以连贯书写，不必刻意分段，但每部分必须以【段名】开头标记：';
-    PW.NINE_PARTS.forEach(p => {
-      const override = fmt[p.key];
-      const txt = (override != null && override.trim()) ? override.trim() : PW.NINE_DEFAULTS[p.key];
-      spec += '\n\n' + p.name + '\n' + txt;
-    });
-    return spec;
-  }
-
   /* ---------- L0：系统主提示词 ---------- */
   function gmSystem(story, layers) {
     const tpl = PW.TEMPLATES[story.genreKey];
@@ -38,7 +26,10 @@ window.PW = window.PW || {};
         + '2. 绝不代替玩家角色做决定，绝不描写玩家角色未声明的行动与心理；其他角色只对玩家已声明的行为做出反应。\n'
         + '3. 若有角色好感或状态变化，可在回复末尾另起一行输出隐藏标记（系统自动剔除，玩家不可见，不要在正文解释）：[[AFF:NPC名:+3]] 或 [[AFF:NPC名:-2]]、[[STATE:NPC名:状态短语]]。\n';
       if (story.useNineFormat) {
-        sys += NL + NL + buildNineSpec(story);
+        const userFmt = (story.outputFormat || '').trim();
+        if (userFmt) {
+          sys += NL + NL + '【自定义输出格式（绝对命令，严格按此格式生成，各部分缺一不可）】' + NL + userFmt;
+        }
         sys += NL + NL + '【系统附加协议（最高优先级）】' + NL
           + '1. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。' + NL
           + '2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情到抉择点必须停下等待玩家输入。';
@@ -97,12 +88,14 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 
     /* 输出格式协议 */
     if (story.useNineFormat) {
-      sys += NL + NL + buildNineSpec(story);
+      const userFmt = (story.outputFormat || '').trim();
+      if (userFmt) {
+        sys += NL + NL + '【自定义输出格式（绝对命令，严格按此格式生成，各部分缺一不可）】' + NL + userFmt;
+      }
       sys += NL + NL + '【系统附加协议（最高优先级）】' + NL
         + '1. 用中文。' + NL
         + '2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情推进到需要玩家抉择时必须停下等待玩家输入。' + NL
-        + '3. 若有NPC好感或状态变化，在回复末尾输出隐藏标记：[[AFF:NPC名:+3]] / [[STATE:NPC名:状态短语]]（系统自动剔除，玩家不可见，不要在正文解释）。' + NL
-        + '4. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。';
+        + '3. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。';
     } else {
     sys += `
 

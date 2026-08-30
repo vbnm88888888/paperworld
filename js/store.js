@@ -63,6 +63,7 @@ window.PW = window.PW || {};
       chat: { messages: [], summary: '', summarizedUntil: 0 },
       phone: { chats: {}, moments: [], groups: [], follows: {}, weibo: { posts: [], hot: [], supertopics: [] } },
       useNineFormat: true,
+      outputFormat: '',
       settings: {
         styleId: tpl ? tpl.styleId : 'delicate',
         pov: 'third',
