@@ -54,6 +54,9 @@
         wxGroup: null,
         groupBusy: false,
         groupModal: { open: false, name: '', memberIds: [] },
+        moCompose: '',
+        wbCompose: '',
+        chaModal: { open: false, name: '', type: '个人' },
         wxNpc: null,
         phoneInput: '',
         wxBusy: false, moBusy: false, wbBusy: false,
@@ -996,6 +999,12 @@
         const phone = this.extractPhoneMarks(parsed.clean);
         const sc = this.stripChoices(phone.clean);
         const msg = { id: PW.Store.uid('m'), kind: 'ai', text: sc.text.trim(), raw, ts: Date.now(), choices: sc.choices, choicesUsed: false };
+        /* 乱文检测：长文本但标点密度异常低 → 提示重掷，防止污染后续生成 */
+        const punct = (sc.text.match(/[，。！？；…：""「」、]/g) || []).length;
+        if (sc.text.length > 300 && punct / sc.text.length < 0.04) {
+          msg.garbled = true;
+          this.toast('⚠️ 本条生成质量异常（标点密度过低），建议长按重掷', '⚠️');
+        }
         story.chat.messages.push(msg);
         this._aiCache.set(msg.id, this.aiBlocks(msg));
         /* 同步好感度（卡片模式/自定义格式模式通用） */
@@ -1373,6 +1382,36 @@
         finally { this.wbDetailBusy = false; }
       },
       backToWeibo() { this.wbDetail = null; this.wbDetailPosts = []; },
+      /* ---------- 玩家发朋友圈/微博/建超话 ---------- */
+      async postMoment() {
+        const text = (this.moCompose || '').trim();
+        if (!text || this.moBusy) return;
+        this.moCompose = '';
+        this.moBusy = true;
+        try { await PW.Phone.playerMomentPost(this.story, text); this.toast('朋友圈已发布', '🌸'); }
+        catch (e) { this.showError(e); }
+        finally { this.moBusy = false; }
+      },
+      async postWeibo() {
+        const text = (this.wbCompose || '').trim();
+        if (!text || this.wbBusy) return;
+        this.wbCompose = '';
+        this.wbBusy = true;
+        try { await PW.Phone.playerWeiboPost(this.story, text); this.toast('微博已发布', '🔥'); }
+        catch (e) { this.showError(e); }
+        finally { this.wbBusy = false; }
+      },
+      openChaModal() { this.chaModal = { open: true, name: '', type: '个人' }; },
+      createCha() {
+        const name = (this.chaModal.name || '').trim();
+        if (!name) { this.toast('超话得有个名字', '🙃'); return; }
+        this.story.phone.weibo.supertopics.unshift({
+          name: name.slice(0, 16), type: this.chaModal.type,
+          readers: '0.1亿', postsN: '0帖', signed: true
+        });
+        this.chaModal.open = false;
+        this.toast('超话「' + name + '」已创建', '⭐');
+      },
 
       /* ---------- Tab 切换 ---------- */
       switchTab(id) {

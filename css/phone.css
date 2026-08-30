@@ -103,6 +103,16 @@
   font-size: 12px; display: flex; align-items: center; justify-content: center;
 }
 .del-grp:active { color: var(--danger); }
+.mo-composer {
+  display: flex; gap: 8px; margin-bottom: 12px;
+  background: var(--card); border-radius: 14px; padding: 10px; box-shadow: var(--shadow);
+}
+.mo-composer input { flex: 1; border: none; outline: none; background: transparent; color: var(--ink); font-size: 14px; }
+.mine-ava { outline: 2px solid var(--acc); }
+.warn-pill {
+  color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+}
 
 /* 九段式格式设置 */
 .nf-item { background: var(--card); border-radius: 12px; margin-bottom: 8px; box-shadow: var(--shadow); overflow: hidden; }

@@ -204,7 +204,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
   /* 记忆块拼接（手机各场景与主线共享记忆） */
   function memBlock(memText) {
     if (!memText || !memText.trim()) return '';
-    return NL + '【相关剧情记忆（来自主线/其他互动，供参考，自然融入，不要复述）】' + NL + memText;
+    return NL + '【相关剧情记忆（仅供情节连贯参考；禁止模仿这些片段的文风与断句，正文按你自己的规范写）】' + NL + memText;
   }
 
   /* ---------- 手机：NPC主动发微信 ---------- */
@@ -294,6 +294,24 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：${(story.chat.summary || '').slice(0, 200) || '（刚开始）'}\n\n生成「${cha.name}」超话的帖子流。` }
     ];
   }
+  /* ---------- 手机：朋友圈玩家发帖 ---------- */
+  function momentsPlayerPostPrompt(story, text, memText) {
+    const cast = (story.npcs || []).filter(x => x.present !== false)
+      .map(x => `${x.name}（${x.identity || ''}；性格：${(x.personality || '').slice(0, 30)}；好感度${x.affinity == null ? 50 : x.affinity}）`).join('；');
+    return [
+      { role: 'system', content: '【任务：朋友圈玩家帖】玩家发了一条朋友圈，生成NPC们的评论。只输出JSON数组（不要代码块）：[{"npc":"NPC名","text":"评论(40字内,完全贴合各自性格与好感度)"}]，1~3条，挑选最可能互动的NPC；只能使用角色表中的NPC名，禁止编造。' + memBlock(memText) },
+      { role: 'user', content: `玩家（${story.player.name || '我'}）的朋友圈内容：${text}\n角色表：${cast}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n\n请生成评论。` }
+    ];
+  }
+
+  /* ---------- 手机：微博玩家发帖 ---------- */
+  function weiboPlayerPostPrompt(story, text, memText) {
+    const fandom = !!story.settings.fandom;
+    return [
+      { role: 'system', content: `【任务：微博玩家帖】玩家发了一条微博，生成评论区。只输出JSON数组（不要代码块）：[{"name":"评论者(可为角色表中的NPC名,或粉丝/路人/营销号昵称)","text":"评论(30字内,口吻有辨识度)"}]，2~4条。${fandom ? '娱乐圈背景：评论区分唯粉/cpf/黑粉/路人。' : ''}${memBlock(memText)}` },
+      { role: 'user', content: `玩家（${story.player.name || '我'}）的微博内容：${text}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n\n请生成评论。` }
+    ];
+  }
   function momentReplyPrompt(story, npc, momentText, comment) {
     return [
       { role: 'system', content: '【任务：评论回复】你在扮演互动小说NPC「' + npc.name + '」（' + (npc.identity || '') + '，性格：' + (npc.personality || '').slice(0, 40) + '）。玩家在你的一条朋友圈下评论了，请以角色身份回复1条评论（30字内，符合人设与关系）。只输出回复内容。' },
@@ -305,6 +323,6 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     gmSystem, historyMessages, build, summaryPrompt, rosterBlock,
     worldviewPrompt, polishPrompt, npcGenPrompt,
     proactiveChatPrompt, phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt, weiboReplyPrompt,
-    hotDetailPrompt, supertopicPrompt, groupChatPrompt
+    hotDetailPrompt, supertopicPrompt, groupChatPrompt, momentsPlayerPostPrompt, weiboPlayerPostPrompt
   };
 })();

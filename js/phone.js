@@ -11,7 +11,7 @@ window.PW = window.PW || {};
     try {
       const hits = await PW.App.retrieveMemories(query);
       if (!hits || !hits.length) return '';
-      return hits.map(h => '· [' + (h.label || '记忆') + '] ' + String(h.rec.text || '').slice(0, 110)).join(' ｜ ');
+      return hits.slice(0, 3).map(h => '· [' + (h.label || '记忆') + '] ' + String(h.rec.text || '').slice(0, 100)).join(' ｜ ');
     } catch (e) { return ''; }
   }
 
@@ -75,16 +75,18 @@ window.PW = window.PW || {};
     try { arr = JSON.parse(text); } catch (e) { throw new Error('朋友圈内容解析失败，请重试'); }
     const created = [];
     arr.slice(0, 5).forEach(it => {
-      const npc = findNpc(story, it.npc) || (story.npcs || []).filter(x => x.present !== false)[0];
-      if (!npc) return;
+      const npc = findNpc(story, it.npc);
+      /* 作者必须忠实：AI给的名字能匹配NPC就归属NPC，匹配不到就按原文显示（路人/陌生人），绝不张冠李戴 */
+      const authorName = npc ? npc.name : String(it.npc || '路人');
       created.push({
-        id: PW.Store.uid('mo'), npcId: npc.id, name: npc.name, text: String(it.text || '').slice(0, 200),
+        id: PW.Store.uid('mo'), npcId: npc ? npc.id : null, name: authorName, text: String(it.text || '').slice(0, 200),
         ts: Date.now() - Math.floor(Math.random() * 3600e3),
         likes: Math.max(0, parseInt(it.likes, 10) || Math.floor(Math.random() * 60)),
         likedByMe: false,
-        comments: (it.comments || []).slice(0, 4).map(c => ({
-          id: PW.Store.uid('c'), name: String(c.name || '路人'), npcId: (findNpc(story, c.name) || {}).id || null, text: String(c.text || '').slice(0, 60)
-        }))
+        comments: (it.comments || []).slice(0, 4).map(c => {
+          const cn = findNpc(story, c.name);
+          return { id: PW.Store.uid('c'), name: String(c.name || '路人'), npcId: cn ? cn.id : null, text: String(c.text || '').slice(0, 60) };
+        })
       });
     });
     story.phone.moments.unshift(...created);
@@ -94,6 +96,35 @@ window.PW = window.PW || {};
       await PW.App.addMemories(story, [{ kind: 'phone', speaker: '朋友圈', text: 'NPC朋友圈动态：' + created.map(c => `${c.name}说「${c.text}」`).join('；') }]);
     }
     return created;
+  }
+
+  /* ---------- 朋友圈：玩家发帖（NPC来评论） ---------- */
+  async function playerMomentPost(story, text) {
+    const mo = {
+      id: PW.Store.uid('mo'), npcId: null, name: story.player.name || '我', mine: true,
+      text: String(text).slice(0, 200), ts: Date.now(), likes: 0, likedByMe: false, comments: []
+    };
+    story.phone.moments.unshift(mo);
+    const memText = await memFor('朋友圈 ' + text);
+    const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPlayerPostPrompt(story, text, memText), stream: false, temperature: 1.2 });
+    let t = (content || '').trim();
+    const mm = t.match(/\[[\s\S]*\]/);
+    if (mm) t = mm[0];
+    try {
+      const arr = JSON.parse(t);
+      arr.slice(0, 3).forEach(it => {
+        const npc = findNpc(story, it.npc);
+        mo.comments.push({
+          id: PW.Store.uid('c'), name: npc ? npc.name : String(it.npc || '路人'),
+          npcId: npc ? npc.id : null, text: String(it.text || '').slice(0, 60)
+        });
+      });
+    } catch (e) { /* 评论解析失败不影响发帖 */ }
+    story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 你发了一条朋友圈`, ts: Date.now() });
+    await PW.App.addMemories(story, [
+      { kind: 'phone', speaker: story.player.name, text: `（玩家发朋友圈）${text}` + (mo.comments.length ? `；评论：${mo.comments.map(c => `${c.name}说「${c.text}」`).join('、')}` : '') }
+    ]);
+    return mo;
   }
 
   /* ---------- 微博（饭圈生态） ---------- */
@@ -118,8 +149,13 @@ window.PW = window.PW || {};
       let post = null;
       if (author.startsWith('npc:')) {
         const npc = findNpc(story, author.slice(4));
-        if (!npc) return;
-        post = { authorType: 'npc', npcId: npc.id, name: npc.name, handle: '@' + npc.name + '工作号' };
+        if (!npc) {
+          /* 匿名发布：按原文作者名显示，绝不张冠李戴 */
+          const nm = author.slice(4) || '路人';
+          post = { authorType: 'netizen', npcId: null, name: nm, handle: '@' + nm };
+        } else {
+          post = { authorType: 'npc', npcId: npc.id, name: npc.name, handle: '@' + npc.name + '工作号' };
+        }
       } else if (author.startsWith('marketing:')) {
         const name = author.slice(10) || '内娱观察bot';
         post = { authorType: 'marketing', npcId: null, name, handle: '@' + name };
@@ -139,17 +175,51 @@ window.PW = window.PW || {};
       posts.push(post);
     });
 
-    const supertopics = (obj.supertopics || []).slice(0, 6).map(t => ({
-      name: String(t.name || '').slice(0, 16), type: t.type === 'cp' ? 'cp' : '个人',
-      readers: String(t.readers || (Math.random() * 3 + 0.2).toFixed(1) + '亿').slice(0, 8),
-      postsN: String(t.postsN || (Math.random() * 90 + 5).toFixed(1) + '万').slice(0, 8),
-      signed: false
-    }));
+    const supertopics = (obj.supertopics || []).slice(0, 6).map(t => {
+      const type = /cp/i.test(String(t.type || '')) ? 'cp' : '个人';
+      return {
+        name: String(t.name || '').slice(0, 16), type,
+        readers: String(t.readers || (Math.random() * 3 + 0.2).toFixed(1) + '亿').slice(0, 8),
+        postsN: String(t.postsN || (Math.random() * 90 + 5).toFixed(1) + '万').slice(0, 8),
+        signed: false
+      };
+    });
 
     story.phone.weibo.hot = hot;
     story.phone.weibo.posts = posts.concat(story.phone.weibo.posts.filter(p => !posts.some(x => x.text === p.text))).slice(0, 24);
     story.phone.weibo.supertopics = supertopics;
     return { hot, posts, supertopics };
+  }
+
+  /* ---------- 微博：玩家发帖 ---------- */
+  async function playerWeiboPost(story, text) {
+    const post = {
+      id: PW.Store.uid('wb'), authorType: 'me', npcId: null,
+      name: story.player.name || '我', handle: '@' + (story.player.name || '我'),
+      text: String(text).slice(0, 200), ts: Date.now(),
+      likes: 0, reposts: 0, likedByMe: false, comments: [], mine: true
+    };
+    story.phone.weibo.posts.unshift(post);
+    const memText = await memFor('微博 ' + text);
+    const { content } = await PW.Api.chat({ messages: PW.Prompts.weiboPlayerPostPrompt(story, text, memText), stream: false, temperature: 1.2 });
+    let t = (content || '').trim();
+    const mm = t.match(/\[[\s\S]*\]/);
+    if (mm) t = mm[0];
+    try {
+      const arr = JSON.parse(t);
+      arr.slice(0, 4).forEach(it => {
+        const npc = findNpc(story, it.name);
+        post.comments.push({
+          id: PW.Store.uid('c'), name: String(it.name || '路人'),
+          npcId: npc ? npc.id : null, text: String(it.text || '').slice(0, 60)
+        });
+      });
+    } catch (e) { /* 评论解析失败不影响发帖 */ }
+    story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 你发了一条微博`, ts: Date.now() });
+    await PW.App.addMemories(story, [
+      { kind: 'phone', speaker: story.player.name, text: `（玩家发微博）${text}` + (post.comments.length ? `；评论：${post.comments.map(c => `${c.name}说「${c.text}」`).join('、')}` : '') }
+    ]);
+    return post;
   }
 
   /* ---------- 微博评论（NPC回复；营销号/网友只留评论） ---------- */
@@ -246,5 +316,5 @@ window.PW = window.PW || {};
     return { replies };
   }
 
-  window.PW.Phone = { wechatSend, proactiveWechat, genMoments, genWeibo, commentOnPost, hotDetail, supertopicFeed, groupSend };
+  window.PW.Phone = { wechatSend, proactiveWechat, genMoments, genWeibo, commentOnPost, hotDetail, supertopicFeed, groupSend, playerMomentPost, playerWeiboPost };
 })();

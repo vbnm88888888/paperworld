@@ -13,7 +13,7 @@ PW.CONFIG = {
     { id: 'deepseek-chat', name: 'deepseek-chat · 旧版兼容' },
     { id: 'deepseek-reasoner', name: 'deepseek-reasoner · 旧版R1' }
   ],
-  DEFAULT_TEMPERATURE: 1.3,
+  DEFAULT_TEMPERATURE: 1.1,
 
   // ---- 四层记忆参数 ----
   TOP_K: 6,            // L3 RAG 每次检索条数

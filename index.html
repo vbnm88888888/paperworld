@@ -115,6 +115,7 @@
                     <span class="no">{{ ci+1 }}</span>{{ c }}
                   </button>
                 </div>
+                <div class="center" v-if="m.garbled"><div class="pill warn-pill">⚠️ 本条生成质量异常，建议长按重掷</div></div>
               </template>
               <!-- 指令 / OOC / 手机旁注 -->
               <div v-else class="center">
@@ -371,14 +372,20 @@
                   </div>
 
                   <div class="app-body" v-else>
-                    <div class="wx-empty" v-if="!story.phone.moments.length && !moBusy">还没有动态。<br>稍等片刻，NPC 会主动发朋友圈；<br>也可以点右上角 🔄。</div>
+                    <!-- 玩家发朋友圈 -->
+                    <div class="mo-composer">
+                      <input v-model="moCompose" placeholder="记录此刻…" @keyup.enter="postMoment">
+                      <button class="btn sm primary" @click="postMoment" :disabled="!moCompose || moBusy">{{ moBusy ? '⏳' : '发布' }}</button>
+                    </div>
+                    <div class="wx-empty" v-if="!story.phone.moments.length && !moBusy">还没有动态。<br>自己发一条，或稍等 NPC 主动发。</div>
                     <div class="mo-item" v-for="mo in story.phone.moments" :key="mo.id">
-                      <div class="avatar">
-                        <img v-if="npcById(mo.npcId) && avSrc(npcById(mo.npcId))" :src="avSrc(npcById(mo.npcId))" alt="">
-                        <template v-else>{{ npcById(mo.npcId) ? avEmoji(npcById(mo.npcId)) : '🙂' }}</template>
+                      <div class="avatar" :class="{ 'mine-ava': mo.mine }">
+                        <img v-if="mo.mine && playerAvSrc" :src="playerAvSrc" alt="">
+                        <img v-else-if="npcById(mo.npcId) && avSrc(npcById(mo.npcId))" :src="avSrc(npcById(mo.npcId))" alt="">
+                        <template v-else>{{ mo.mine ? (playerAvEmoji || '🙂') : (npcById(mo.npcId) ? avEmoji(npcById(mo.npcId)) : '🙂') }}</template>
                       </div>
                       <div class="mo-body">
-                        <b>{{ mo.name }}</b>
+                        <b>{{ mo.name }}</b><span class="chip gray" v-if="mo.mine" style="font-size:10px;margin-left:4px">我</span>
                         <div class="mo-text">{{ mo.text }}</div>
                         <div class="mo-foot">
                           <time>{{ fmtRel(mo.ts) }}</time>
@@ -503,14 +510,21 @@
                   </div>
 
                   <div class="app-body" v-if="wbTab==='feed'">
+                    <!-- 玩家发微博 -->
+                    <div class="mo-composer wb-compose">
+                      <input v-model="wbCompose" placeholder="有什么新鲜事？" @keyup.enter="postWeibo">
+                      <button class="btn sm primary" @click="postWeibo" :disabled="!wbCompose || wbBusy">{{ wbBusy ? '⏳' : '发布' }}</button>
+                    </div>
                     <div class="wx-empty" v-if="!story.phone.weibo.posts.length && !wbBusy">点右上角 🔄，生成热搜与微博生态<br>（营销号 / 路人网友 / NPC 本尊）</div>
                     <div class="wb-post" v-for="p in story.phone.weibo.posts" :key="p.id">
-                      <div class="avatar" :class="{ 'mk-ava': p.authorType==='marketing' }">
+                      <div class="avatar" :class="{ 'mk-ava': p.authorType==='marketing', 'mine-ava': p.authorType==='me' }">
                         <img v-if="p.authorType==='npc' && npcById(p.npcId) && avSrc(npcById(p.npcId))" :src="avSrc(npcById(p.npcId))" alt="">
-                        <template v-else>{{ p.authorType==='marketing' ? '📣' : '🧑‍💻' }}</template>
+                        <img v-else-if="p.authorType==='me' && playerAvSrc" :src="playerAvSrc" alt="">
+                        <template v-else>{{ p.authorType==='marketing' ? '📣' : p.authorType==='me' ? '🙂' : '🧑‍💻' }}</template>
                       </div>
                       <div class="wb-body">
                         <div class="r1"><b :class="{ 'npc-name': p.authorType==='npc' }">{{ p.name }}</b>
+                          <span class="chip gray" v-if="p.authorType==='me'" style="font-size:10px">我</span>
                           <span class="wb-handle">{{ p.handle }}</span>
                           <button class="wb-fol" v-if="p.authorType==='npc'" @click="toggleFollow(p.npcId)">{{ isFollowed(p.npcId) ? '已关注' : '+ 关注' }}</button>
                         </div>
@@ -546,7 +560,10 @@
                   </div>
 
                   <div class="app-body" v-else>
-                    <div class="wx-empty" v-if="!story.phone.weibo.supertopics.length && !wbBusy">还没有超话，点右上角 🔄</div>
+                    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+                      <button class="btn sm" @click="openChaModal">➕ 创建超话</button>
+                    </div>
+                    <div class="wx-empty" v-if="!story.phone.weibo.supertopics.length && !wbBusy">还没有超话，点右上角 🔄 或 ➕ 创建</div>
                     <div class="wb-cha h-click" v-for="(c, ci) in story.phone.weibo.supertopics" :key="ci" @click="openChaDetail(c)">
                       <div class="cha-ava">{{ c.type==='cp' ? '💞' : '⭐' }}</div>
                       <div class="cha-info">
@@ -933,6 +950,22 @@
         <div style="font-size:11.5px;color:var(--ink3);margin-top:6px" v-if="!presentNpcs.length">还没有NPC，先去「角色」页添加</div>
       </div>
       <button class="btn primary block" @click="createGroup">✔ 创建群聊</button>
+    </div>
+  </div>
+
+  <!-- 创建超话 -->
+  <div class="mask" v-if="chaModal.open" @click.self="chaModal.open=false">
+    <div class="modal" style="width:min(88vw,360px)">
+      <button class="close-x" @click="chaModal.open=false">✕</button>
+      <h3>⭐ 创建超话</h3>
+      <div class="field"><label>超话名称</label><input class="inp" v-model="chaModal.name" placeholder="例如：文宣的末日日常"></div>
+      <div class="field"><label>类型</label>
+        <div class="seg">
+          <button :class="{on: chaModal.type==='个人'}" @click="chaModal.type='个人'">⭐ 个人超话</button>
+          <button :class="{on: chaModal.type==='cp'}" @click="chaModal.type='cp'">💞 CP超话</button>
+        </div>
+      </div>
+      <button class="btn primary block" @click="createCha">✔ 创建并进入</button>
     </div>
   </div>
 
