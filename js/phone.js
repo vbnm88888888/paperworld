@@ -39,7 +39,9 @@ window.PW = window.PW || {};
       id: PW.Store.uid('w'), role: 'npc', text: line.replace(/^["“]|["”]$/g, ''), ts: Date.now()
     }));
     list.push(...replies);
-    const note = `📱 微信 · ${npc.name}：${text.length > 24 ? text.slice(0, 24) + '…' : text}`;
+    /* 旁注方向必须准确：你发的 / TA回的 分开标注，避免剧情里张冠李戴 */
+    let note = `📱 微信 · 你发给${npc.name}：「${text.length > 24 ? text.slice(0, 24) + '…' : text}」`;
+    if (replies.length) note += ` ｜ ${npc.name}回复：「${replies[0].text.slice(0, 20)}${replies[0].text.length > 20 ? '…' : ''}」`;
     story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: note, ts: Date.now() });
     await PW.App.addMemories(story, [
       { kind: 'phone', scope: 'wechat', speaker: story.player.name, text: `（微信上玩家对${npc.name}说）${text}` },
@@ -353,7 +355,7 @@ window.PW = window.PW || {};
       });
     });
     list.push(...replies);
-    story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 微信群「${group.name}」：${text.length > 20 ? text.slice(0, 20) + '…' : text}`, ts: Date.now() });
+    story.chat.messages.push({ id: PW.Store.uid('m'), kind: 'phone', text: `📱 微信群「${group.name}」· 你说：${text.length > 20 ? text.slice(0, 20) + '…' : text}${replies.length ? ' ｜ ' + replies.map(r => r.name + '回复').join('、') : ''}`, ts: Date.now() });
     await PW.App.addMemories(story, [
       { kind: 'phone', scope: 'wechat', speaker: story.player.name, text: `（微信群「${group.name}」里玩家说）${text}` },
       { kind: 'phone', scope: 'wechat', speaker: '群聊', text: `（群里回复）${replies.map(r => `${r.name}：${r.text}`).join(' / ')}` }
