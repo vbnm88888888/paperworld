@@ -142,6 +142,17 @@ window.PW = window.PW || {};
     return true;
   }
 
+  /* 保存时即时向量化：把一批已入库（vec=null）的记录逐个embed，回写向量。
+   * 语义模式开启且模型就绪时，新记忆增量生成向量，无需依赖手动全量重建。 */
+  async function embedRecords(records) {
+    const todo = records.filter(r => !r.vec && r.text && r.text.trim());
+    if (!todo.length) return;
+    const pipe = await ensureEmbedder();
+    const vecs = await embedTexts(pipe, todo.map(r => r.text));
+    for (let k = 0; k < todo.length; k++) todo[k].vec = vecs[k];
+    await PW.Store.memPut(todo);
+  }
+
   /* ---------- 统一检索入口 ---------- */
   /**
    * @param records 故事的全部记忆记录 [{id, text, kind, speaker, chapter, ts, vec?}]
@@ -197,6 +208,7 @@ window.PW = window.PW || {};
 
   window.PW.Rag = {
     tokenize, ensureIndex, buildIndex, addToIndex, removeFromIndex, searchBM25,
-    ensureEmbedder, embedProgress, embedTexts, reindexSemantic, search, isSemanticReady: () => !!sem.pipe
+    ensureEmbedder, embedProgress, embedTexts, reindexSemantic, embedRecords, search,
+    isSemanticReady: () => !!sem.pipe
   };
 })();

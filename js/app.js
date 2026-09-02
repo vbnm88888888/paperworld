@@ -561,6 +561,10 @@
           recs.forEach(r => this.mem.records.push(r));
           const idx = PW.Rag.ensureIndex(story.id, this.mem.records);
           recs.forEach(r => PW.Rag.addToIndex(idx, r));
+          // 保存时即时向量化（RAG）：语义模式已就绪则后台增量embed，不阻塞剧情
+          if (this.settings.memoryMode === 'semantic' && PW.Rag.isSemanticReady()) {
+            PW.Rag.embedRecords(recs).catch(e => console.warn('incremental embed fail', e));
+          }
         }
       },
       async retrieveFor() {
