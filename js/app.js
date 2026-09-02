@@ -581,21 +581,29 @@
         return this._doRetrieve(q);
       },
       /* 共享记忆检索（四场景互通，但按端隔离：微信不见微博舆论） */
-      async retrieveMemories(query, scopes) {
+      async retrieveMemories(query, scopes, speaker) {
         if (!query) return [];
         var pool = this.mem.records;
         if (scopes && scopes.length) {
-          /* 端隔离：剧情记忆(plot)对所有端可见，其余只允许本端的记忆 */
-          pool = pool.filter(r => !r.scope || r.scope === 'plot' || scopes.indexOf(r.scope) >= 0);
+          /* 端隔离：剧情记忆(plot)对所有端可见，其余只允许本端的记忆；
+             * 微信内再按说话人隔离：和NPC2聊天时，不把NPC1的微信记忆喂给NPC2，
+             * 否则NPC2会"以为"NPC1做的事/说的话是自己干的。 */
+          pool = pool.filter(r => {
+            if (!r.scope || r.scope === 'plot') return true;
+            if (scopes.indexOf(r.scope) < 0) return false;
+            // 端内按说话人隔离：和NPC2聊天时，只保留 剧情(plot) + NPC2自己的微信记忆
+            // + 玩家发给NPC2的微信消息(text里含NPC2名字)。这样NPC1的微信记忆不会漏给NPC2。
+            return !speaker || r.speaker === speaker || String(r.text || '').indexOf(speaker) >= 0;
+          });
         }
         if (!pool.length) return [];
         return this._doRetrieve(query, pool);
       },
       /* 统一记忆块格式化（手机各模块共用一个入口，保证格式一致） */
-      async memoryBlock(query, scopes) {
+      async memoryBlock(query, scopes, speaker) {
         if (!query) return '';
         try {
-          const hits = await this.retrieveMemories(query, scopes);
+          const hits = await this.retrieveMemories(query, scopes, speaker);
           if (!hits || !hits.length) return '';
           return hits.slice(0, 3).map(h => '· [' + (h.label || '记忆') + '] ' + String(h.rec.text || '').slice(0, 100)).join(' ｜ ');
         } catch (e) { return ''; }
@@ -666,10 +674,9 @@
         if (!this.story) return 0;
         const s = PW.Prompts.gmSystem(this.story, { memories: [], summary: '' });
         const msgs = this.story.chat.messages;
-        const until = this.story.chat.summarizedUntil || 0;
-        const l1 = msgs.slice(Math.max(until, msgs.length - this.settings.recentTurns));
-        let est = PW.Store.estTokens(s) + PW.Store.estTokens(this.story.chat.summary || '');
-        l1.forEach(m => { est += PW.Store.estTokens(m.raw || m.text || ''); });
+        /* L2 前情提要已停用：剧情全量原文都计入上下文估算 */
+        let est = PW.Store.estTokens(s);
+        msgs.forEach(m => { est += PW.Store.estTokens(m.raw || m.text || ''); });
         est += this.settings.topK * 45;
         return Math.round(est);
       },
@@ -901,7 +908,6 @@
           this.busy = false; this.streamText = ''; this.abortCtl = null;
           this.lastCtxEst = this.computeCtxEst();
           this.scrollBottom();
-          this.doSummary(false);
         }
       },
       stopStream() {
@@ -980,42 +986,10 @@
         });
       },
       async doSummary(force) {
-        if (this.summarizing || !this.settings.apiKey) return;
-        this.summarizing = true;
-        try {
-          const story = this.story;
-          const msgs = story.chat.messages;
-          const until = story.chat.summarizedUntil || 0;
-          const keep = this.settings.recentTurns;
-          if (!force && msgs.length - until < keep + PW.CONFIG.SUMMARY_EVERY) return;
-          const cut = force ? Math.max(until, msgs.length - keep) : msgs.length - keep;
-          if (cut <= until) return;
-          const slice = msgs.slice(until, cut);
-          if (!slice.length) return;
-          const texts = slice.map(m =>
-            m.kind === 'me' ? `玩家：${m.text}` :
-            m.kind === 'ai' ? 'GM：' + (m.raw || m.text).slice(0, 140) :
-            m.text
-          ).join('\n');
-          const { content } = await PW.Api.chat({
-            messages: PW.Prompts.summaryPrompt(story, story.chat.summary, texts),
-            stream: false, temperature: 0.6
-          });
-          if (content && content.trim().length >= PW.CONFIG.MIN_SUMMARY_LEN) {
-            story.chat.summary = content.trim();
-            story.chat.summarizedUntil = cut;
-            this.lastCtxEst = this.computeCtxEst();
-            this.toast('旧剧情已压缩成前情提要，token 省下来了', '🧠');
-          }
-        } catch (e) { /* 摘要失败静默，下次再试 */ }
-        finally { this.summarizing = false; }
+        /* L2 前情提要已停用：剧情全量原文进上下文，避免压缩丢失细节。保留空实现以兼容旧调用。 */
       },
       async resummarize() {
-        if (!this.story.chat.messages.length) { this.toast('还没有剧情可压缩', '📜'); return; }
-        this.mem.busy = true;
-        await this.doSummary(true);
-        this.mem.busy = false;
-        if (!this.summarizing) this.toast('前情提要已更新', '📜');
+        this.toast('前情提要已停用：剧情全程携带原文，不会丢失细节', '📜');
       },
 
       /* ---------- 消息操作 ---------- */

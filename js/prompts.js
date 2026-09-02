@@ -81,10 +81,7 @@ ${npcCards}`;
 ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0, 160) + '…' : m.text}`).join('\n')}`;
     }
 
-    /* L2 滚动摘要 */
-    if (layers.summary) {
-      sys += `\n【前情提要】（更早剧情的压缩记录）\n${layers.summary}`;
-    }
+    /* L2 滚动摘要：已停用（改为剧情全量原文，避免压缩丢细节） */
 
     /* 输出格式协议 */
     if (story.useNineFormat) {
@@ -141,21 +138,28 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     });
   }
 
+  /* 最近剧情原文（替代"前情提要"：直接取最近n条剧情，绕开摘要压缩，保证细节不丢） */
+  function recentPlot(story, n) {
+    const pName = story.player.name || '我';
+    return (story.chat.messages || []).slice(-(n || 6))
+      .filter(m => m && m.text && m.text.trim())
+      .map(m => {
+        const who = m.kind === 'me' ? pName : (m.kind === 'phone' ? '（系统旁注）' : '（剧情）');
+        return who + '：' + String(m.raw || m.text).replace(/\s+/g, ' ').slice(0, 120);
+      }).join('\n');
+  }
+
   /* ---------- 组装完整请求 ---------- */
   async function build(story, userInput, retrieved) {
-    const s = PW.App.settings;
-    const msgs = story.chat.messages;
-    const summarized = story.chat.summarizedUntil || 0;
-
-    /* 未被摘要覆盖、超出窗口的旧消息（理论上不应存在，兜底并入摘要提示） */
-    const windowStart = Math.max(summarized, Math.max(0, msgs.length - (s.recentTurns || PW.CONFIG.RECENT_TURNS)));
+    /* 不做 L2 压缩摘要：窗口从0开始全量携带剧情原文，防止"前情提要"压缩丢失细节 */
+    const windowStart = 0;
 
     const layers = {
       memories: (retrieved || []).map(h => ({
         label: h.label,
         text: h.rec.text
       })),
-      summary: story.chat.summary || ''
+      summary: ''   // 前情提要已停用
     };
 
     const messages = [{ role: 'system', content: gmSystem(story, layers) }];
@@ -220,7 +224,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     const n = count || 2; // 期望条数由调用方随机，避免每次都固定
     return [
       { role: 'system', content: `【任务：微信主动消息】你是互动小说的社交模拟器。根据**剧情契机 + 各NPC好感度 + 性格**综合判断谁最可能主动联系玩家，并由TA在微信上主动发来消息。选取规则（必须遵守）：\n1. 优先选剧情里近期有交集、或有话题找你、或事件与TA相关的人；\n2. 在同等人选下，好感度越高越主动、语气越亲昵；好感度低(40以下)除非剧情强相关否则不选；\n3. 消息语气完全贴合所选NPC的性格与说话风格与你们当前的关系(好感度)，不能千人一面。\n只输出JSON对象（不要代码块）：{"npc":"NPC名","messages":["第一条","第二条"],"why":"简短理由(12字内，注明依据好感度/性格/剧情的哪一点)"}。恰好${n}条，口语化、像真的微信、松散自然。` + memBlock(memText) },
-      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表（含好感度档次）：${cast}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请根据以上剧情与各角色好感度、性格，判断谁最该主动，生成TA的主动消息。` }
+      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表（含好感度档次）：${cast}\n近期剧情：\n${recentPlot(story, 6) || '（刚开始）'}\n\n请根据以上剧情与各角色好感度、性格，判断谁最该主动，生成TA的主动消息。` }
     ];
   }
 
@@ -239,9 +243,11 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
   function phoneChatMessages(story, npc, userText, chatHistory, memText) {
     const recent = (chatHistory || []).slice(-8).map(m =>
       `${m.role === 'me' ? story.player.name || '我' : npc.name}：${m.text}`).join('\n');
+    /* 最近剧情原文（替代前情提要）：剧情界面刚发生的事直接带进微信对话，保证NPC“刚聊的都记得” */
+    const storyRecent = recentPlot(story, 8);
     return [
-      { role: 'system', content: '【任务：微信聊天】你正在扮演互动小说《' + story.title + '》中的NPC「' + npc.name + '」在微信上与玩家聊天。\n角色：' + npc.name + '，' + (npc.identity || '') + '，性格：' + (npc.personality || '') + '，说话风格：' + (npc.speech || '') + '。与玩家关系：' + (npc.relation || '') + (npc.secret ? '（隐藏秘密，聊到相关话题可微妙流露但绝不直说）' : '') + '\n剧情背景摘要：' + ((story.chat.summary || story.worldview.text || '').slice(0, 300)) + '\n要求：符合微信聊天习惯——口语化、短句、可以1~3条连发；每条一行；贴合角色性格与当前剧情；不要旁白不要引号。' + memBlock(memText) },
-      { role: 'user', content: `最近的聊天记录：\n${recent || '（刚开始聊）'}\n\n玩家刚发来：${userText}\n\n请以${npc.name}的身份回复（1~3行，每行一条消息）。` }
+      { role: 'system', content: '【任务：微信聊天】你正在扮演互动小说《' + story.title + '》中的NPC「' + npc.name + '」在微信上与玩家聊天。\n角色：' + npc.name + '，' + (npc.identity || '') + '，性格：' + (npc.personality || '') + '，说话风格：' + (npc.speech || '') + '。与玩家关系：' + (npc.relation || '') + (npc.secret ? '（隐藏秘密，聊到相关话题可微妙流露但绝不直说）' : '') + '\n世界背景：' + ((story.worldview.text || '').slice(0, 300)) + '\n要求：符合微信聊天习惯——口语化、短句、可以1~3条连发；每条一行；回答要基于"最近的剧情/你们共同的经历"，与剧情里刚发生的事保持一致；但必须严格区分——剧情里是【哪个NPC】做的事、说过的话，你只对你自己参与或知道的剧情负责，绝不能把别的NPC做过的事当成你自己做的；贴合角色性格与当前剧情；不要旁白不要引号。' + memBlock(memText) },
+      { role: 'user', content: `最近剧情（你可能有份参与或知道的进展）：\n${storyRecent || '（刚开始）'}\n\n${npc.name}与玩家最近的微信记录：\n${recent || '（刚开始聊）'}\n\n玩家刚发来：${userText}\n\n请以${npc.name}的身份回复（1~3行，每行一条消息）。` }
     ];
   }
 
@@ -255,7 +261,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       : '动态符合人设与近况，可带emoji。';
     return [
       { role: 'system', content: `【任务：朋友圈】你是社交媒体内容生成器，为互动小说里的NPC们生成微信朋友圈动态。只输出JSON数组（不要代码块），每项：{"npc":"NPC名","text":"动态内容(80字内)","likes":数字,"comments":[{"name":"名字(NPC或朋友)","text":"评论(30字内)"}]}。${flavor}\n⚠️场景隔离（必须遵守）：这是微信朋友圈——动态和评论都是朋友间的日常分享，口吻亲密随意；严禁出现粉丝/cpf/唯粉/黑粉/营销号/热搜/超话等微博饭圈词汇，严禁写成公开微博体。` },
-      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n最近剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成${n}条与剧情有微妙关联的朋友圈动态（可互相评论）。` },
+      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n最近剧情：\n${recentPlot(story, 6) || '（刚开始）'}\n\n请生成${n}条与剧情有微妙关联的朋友圈动态（可互相评论）。` },
     ].map(m => m.role === 'system' ? { role: 'system', content: m.content + memBlock(memText) } : m);
   }
   function weiboPrompt(story, memText) {
@@ -272,7 +278,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       : `微博内容与世界观和剧情呼应：NPC本人发言贴合人设，营销号/网友围绕剧情事件讨论，评论自然多样；超话按剧情里的话题生成；`;
     return [
       { role: 'system', content: `【任务：微博】你是社交媒体内容生成器，为互动小说生成完整的微博生态。只输出JSON对象（不要代码块）：\n{"hot":[{"text":"热搜词条","tag":"沸|爆|热|新之一","heat":"234.5万"}],\n"posts":[{"author":"npc:NPC名","text":"微博正文(100字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝名/路人/其他NPC)","text":"评论内容(30字内)"}]},\n{"author":"marketing:账号名",...同上},\n{"author":"netizen:昵称",...同上}],\n"supertopics":[{"name":"超话名","type":"个人或cp","members":["成员名A","成员名B"],"readers":"1.2亿","postsN":"56.7万"}]}\n作者类型：npc:开头=NPC本人；marketing:=营销号；netizen:=普通网友。\ncp超话必须给members（恰好两位成员名，可以是NPC名或玩家名），cpf帖子要双人向、有真实饭圈味。${memBlock(memText)}` },
-      { role: 'user', content: `故事：${story.title}\n世界观：${(story.worldview.text || '').slice(0, 200)}\n角色（艺人/人物）：${artists}\n玩家：${player}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n${req}\n\n生成：5条热搜、5条微博（至少2条营销号+1条路人网友+2条NPC本人）、3个超话（含至少1个CP超话，须给members两位成员名）。` }
+      { role: 'user', content: `故事：${story.title}\n世界观：${(story.worldview.text || '').slice(0, 200)}\n角色（艺人/人物）：${artists}\n玩家：${player}\n近期剧情：\n${recentPlot(story, 6) || '（刚开始）'}\n\n${req}\n\n生成：5条热搜、5条微博（至少2条营销号+1条路人网友+2条NPC本人）、3个超话（含至少1个CP超话，须给members两位成员名）。` }
     ];
   }
   function weiboReplyPrompt(story, npc, postText, comment) {
@@ -287,7 +293,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     const artists = (story.npcs || []).filter(x => x.present !== false).map(x => `${x.name}（${x.identity || ''}）`).join('；');
     return [
       { role: 'system', content: `【任务：热搜详情】你是社交媒体内容生成器。针对一条热搜词条，生成微博正文与评论区。只输出JSON数组（不要代码块），每项：{"author":"npc:NPC名"或"marketing:账号名"或"netizen:昵称","text":"微博内容(120字内,可带#话题#)","likes":数字,"reposts":数字,"comments":[{"name":"评论者(粉丝/路人/黑粉,口吻有辨识度)","text":"评论(30字内)"}]}。共4~6条。${fandom ? '娱乐圈背景：评论区分唯粉/cpf/黑粉/路人，口吻要有饭圈辨识度。' : ''}${memBlock(memText)}` },
-      { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n热搜词条：${hotText}\n\n生成与该词条相关的微博和评论（内容要与词条和剧情呼应）。` }
+      { role: 'user', content: `故事：${story.title}\n角色：${artists}\n近期剧情：\n${recentPlot(story, 6) || '（刚开始）'}\n热搜词条：${hotText}\n\n生成与该词条相关的微博和评论（内容要与词条和剧情呼应）。` }
     ];
   }
   /* 成员解析：'player' 或 npcId 或原始名字 → 描述文本 */
@@ -316,7 +322,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     }
     return [
       { role: 'system', content: `【任务：超话详情】你是超话内容生成器，模拟真实微博超话社区。只输出JSON数组（不要代码块），每项：{"author":"netizen:粉丝昵称","text":"帖子(130字内,超话社区口吻,可带#超话名#)","likes":数字,"comments":[{"name":"回复者","text":"回复(30字内)"}]}。共4~6条。${theme}${memBlock(memText)}` },
-      { role: 'user', content: `故事：${story.title}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n\n生成「${cha.name}」超话的帖子流（内容要与剧情和人设呼应）。` }
+      { role: 'user', content: `故事：${story.title}\n近期剧情：\n${recentPlot(story, 6) || '（刚开始）'}\n\n生成「${cha.name}」超话的帖子流（内容要与剧情和人设呼应）。` }
     ];
   }
   /* ---------- 手机：朋友圈玩家发帖 ---------- */
@@ -325,7 +331,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
       .map(x => `${x.name}（${x.identity || ''}；性格：${(x.personality || '').slice(0, 30)}；好感度${x.affinity == null ? 50 : x.affinity}）`).join('；');
     return [
       { role: 'system', content: '【任务：朋友圈玩家帖】玩家发了一条朋友圈，生成NPC们的评论。只输出JSON数组（不要代码块）：[{"npc":"NPC名","text":"评论(40字内,完全贴合各自性格与好感度)"}]，1~3条，挑选最可能互动的NPC；只能使用角色表中的NPC名，禁止编造。' + memBlock(memText) },
-      { role: 'user', content: `玩家（${story.player.name || '我'}）的朋友圈内容：${text}\n角色表：${cast}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n\n请生成评论。` }
+      { role: 'user', content: `玩家（${story.player.name || '我'}）的朋友圈内容：${text}\n角色表：${cast}\n近期剧情：\n${recentPlot(story, 6) || '（刚开始）'}\n\n请生成评论。` }
     ];
   }
 
@@ -334,7 +340,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     const fandom = !!story.settings.fandom;
     return [
       { role: 'system', content: `【任务：微博玩家帖】玩家发了一条微博，生成评论区。只输出JSON数组（不要代码块）：[{"name":"评论者(可为角色表中的NPC名,或粉丝/路人/营销号昵称)","text":"评论(30字内,口吻有辨识度)","likes":数字}]，2~4条。${fandom ? '娱乐圈背景：评论区分唯粉/cpf/黑粉/路人。' : ''}${memBlock(memText)}` },
-      { role: 'user', content: `玩家（${story.player.name || '我'}）的微博内容：${text}\n近期剧情：${(story.chat.summary || '').slice(0, 250) || '（刚开始）'}\n\n请生成评论。` }
+      { role: 'user', content: `玩家（${story.player.name || '我'}）的微博内容：${text}\n近期剧情：\n${recentPlot(story, 6) || '（刚开始）'}\n\n请生成评论。` }
     ];
   }
   function momentReplyPrompt(story, npc, momentText, comment) {
@@ -352,7 +358,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
   }
 
   window.PW.Prompts = {
-    gmSystem, historyMessages, build, summaryPrompt, rosterBlock,
+    gmSystem, historyMessages, recentPlot, build, summaryPrompt, rosterBlock,
     worldviewPrompt, polishPrompt, npcGenPrompt,
     proactiveChatPrompt, phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt, weiboReplyPrompt,
     hotDetailPrompt, supertopicPrompt, groupChatPrompt, momentsPlayerPostPrompt, weiboPlayerPostPrompt, momentReplyToReplyPrompt

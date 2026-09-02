@@ -6,9 +6,9 @@ window.PW = window.PW || {};
   }
 
   /* 从共享记忆池检索相关剧情（四场景记忆互通，统一走 App.memoryBlock） */
-  async function memFor(query, scopes) {
+  async function memFor(query, scopes, speaker) {
     if (!query || !PW.App || !PW.App.memoryBlock) return '';
-    return PW.App.memoryBlock(query, scopes);
+    return PW.App.memoryBlock(query, scopes, speaker);
   }
 
   /* 宽松JSON解析：剥掉markdown代码块/前后杂质，兼容对象与数组 */
@@ -29,7 +29,8 @@ window.PW = window.PW || {};
     const chats = story.phone.chats;
     const list = chats[npc.id] || (chats[npc.id] = []);
     list.push({ id: PW.Store.uid('w'), role: 'me', text, ts: Date.now() });
-    const memText = await memFor(npc.name + ' ' + text, ['wechat']);
+    // 只检索【剧情】+【npc本人在微信上的记忆】，别人(其它NPC)的微信记忆不得进入本对话，防止"错乱/张冠李戴"
+    const memText = await memFor(npc.name + ' ' + text, ['wechat'], npc.name);
     const { content } = await PW.Api.chat({
       messages: PW.Prompts.phoneChatMessages(story, npc, text, list, memText),
       stream: false, temperature: 1.2
@@ -52,7 +53,7 @@ window.PW = window.PW || {};
 
   /* ---------- 微信：NPC主动发消息 ---------- */
   async function proactiveWechat(story) {
-    const memText = await memFor('微信 主动联系 ' + (story.chat.summary || '').slice(0, 80), ['wechat']);
+    const memText = await memFor('微信 主动联系 ' + (PW.Prompts.recentPlot(story, 3) || '').slice(0, 120), ['wechat']);
     /* 随机条数：1~3条随机，让每次进入都出现不同数量的主动消息，不固定三条 */
     const count = 1 + Math.floor(Math.random() * 3);
     const { content } = await PW.Api.chat({
@@ -78,7 +79,7 @@ window.PW = window.PW || {};
   async function genMoments(story, n) {
     /* 刷新即清掉玩家自己的旧帖子（按用户习惯：刷新=看新内容） */
     story.phone.moments = [];
-    const memText = await memFor('朋友圈 动态 ' + (story.chat.summary || '').slice(0, 80), ['moments']);
+    const memText = await memFor('朋友圈 动态 ' + (PW.Prompts.recentPlot(story, 3) || '').slice(0, 120), ['moments']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.momentsPrompt(story, n, memText), stream: false, temperature: 1.4 });
     let arr;
     try { arr = parseJsonLoose(content); } catch (e) { throw new Error('朋友圈内容解析失败，请重试'); }
@@ -145,7 +146,7 @@ window.PW = window.PW || {};
 
   /* ---------- 微博（饭圈生态） ---------- */
   async function genWeibo(story) {
-    const memText = await memFor('微博 热搜 舆论 ' + (story.chat.summary || '').slice(0, 80), ['weibo']);
+    const memText = await memFor('微博 热搜 舆论 ' + (PW.Prompts.recentPlot(story, 3) || '').slice(0, 120), ['weibo']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.weiboPrompt(story, memText), stream: false, temperature: 1.4 });
     const obj = parseJsonLoose(content);
 
@@ -300,7 +301,7 @@ window.PW = window.PW || {};
 
   /* ---------- 微博：超话帖子流 ---------- */
   async function supertopicFeed(story, cha) {
-    const memText = await memFor('超话 ' + cha.name + ' ' + (story.chat.summary || '').slice(0, 60), ['weibo']);
+    const memText = await memFor('超话 ' + cha.name + ' ' + (PW.Prompts.recentPlot(story, 3) || '').slice(0, 100), ['weibo']);
     const { content } = await PW.Api.chat({ messages: PW.Prompts.supertopicPrompt(story, cha, memText), stream: false, temperature: 1.4 });
     const arr = parseJsonLoose(content);
     return arr.slice(0, 8).map(it => buildPost(story, it));

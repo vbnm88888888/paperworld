@@ -284,12 +284,11 @@
           <button class="btn danger block" style="margin-bottom:14px" @click="clearMemAll">🗑 清空本故事全部记忆</button>
 
           <div class="summary-card">
-            <div class="s-head"><b>📜 前情提要（L2 自动摘要）</b>
+            <div class="s-head"><b>📜 前情提要（已停用自动压缩）</b>
               <button class="btn sm ghost" @click="mem.summaryEdit=!mem.summaryEdit">{{ mem.summaryEdit ? '完成' : '编辑' }}</button>
-              <button class="btn sm ghost" @click="resummarize(true)" :disabled="mem.busy">重新压缩</button>
             </div>
-            <textarea v-if="mem.summaryEdit" class="inp" v-model="story.chat.summary" style="min-height:120px" placeholder="暂无摘要（剧情变长后自动生成）"></textarea>
-            <div v-else class="s-body">{{ story.chat.summary || '暂无摘要——剧情每积累约36条消息，会自动把旧剧情压缩成前情提要。' }}</div>
+            <textarea v-if="mem.summaryEdit" class="inp" v-model="story.chat.summary" style="min-height:120px" placeholder="可手动写剧情笔记（可选）"></textarea>
+            <div v-else class="s-body">{{ story.chat.summary || '已停用自动摘要：剧情全程携带原文，避免压缩丢失细节。这里可手动写笔记。' }}</div>
           </div>
 
           <div class="sec-title">检索测试 <span class="line"></span></div>
