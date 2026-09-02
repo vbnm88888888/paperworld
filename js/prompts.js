@@ -208,12 +208,19 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
   }
 
   /* ---------- 手机：NPC主动发微信 ---------- */
-  function proactiveChatPrompt(story, memText) {
+  function proactiveChatPrompt(story, memText, count) {
+    /* 好感度档次：驱动"谁更可能主动"与消息语气 */
+    const affTier = a => a == null ? 50 : a;
     const cast = (story.npcs || []).filter(x => x.present !== false)
-      .map(x => `${x.name}（${x.identity || ''}；性格：${(x.personality || '').slice(0, 30)}；好感度${x.affinity == null ? 50 : x.affinity}）`).join('；');
+      .map(x => {
+        const a = affTier(x.affinity);
+        const tier = a >= 80 ? '亲密度高，很想主动联系' : a >= 55 ? '有好感，偶尔会主动' : a >= 40 ? '关系一般，基本懒得主动' : '好感度低，除非有正事否则不会主动';
+        return `${x.name}（身份：${x.identity || ''}；性格：${(x.personality || '').slice(0, 30)}；说话风格：${(x.speech || '').slice(0, 20)}；好感度${a}，${tier}）`;
+      }).join('；');
+    const n = count || 2; // 期望条数由调用方随机，避免每次都固定
     return [
-      { role: 'system', content: '【任务：微信主动消息】你是互动小说的社交模拟器。根据剧情进展，挑选一位【最有可能主动联系玩家】的NPC，让TA在微信上主动发来消息。只输出JSON对象（不要代码块）：{"npc":"NPC名","messages":["第一条","第二条"],"why":"简短理由(12字内)"}。消息要完全贴合该NPC的性格、说话风格与当前剧情，1~3条，口语化、像真的微信。' + memBlock(memText) },
-      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表：${cast}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请生成主动消息。` }
+      { role: 'system', content: `【任务：微信主动消息】你是互动小说的社交模拟器。根据**剧情契机 + 各NPC好感度 + 性格**综合判断谁最可能主动联系玩家，并由TA在微信上主动发来消息。选取规则（必须遵守）：\n1. 优先选剧情里近期有交集、或有话题找你、或事件与TA相关的人；\n2. 在同等人选下，好感度越高越主动、语气越亲昵；好感度低(40以下)除非剧情强相关否则不选；\n3. 消息语气完全贴合所选NPC的性格与说话风格与你们当前的关系(好感度)，不能千人一面。\n只输出JSON对象（不要代码块）：{"npc":"NPC名","messages":["第一条","第二条"],"why":"简短理由(12字内，注明依据好感度/性格/剧情的哪一点)"}。恰好${n}条，口语化、像真的微信、松散自然。` + memBlock(memText) },
+      { role: 'user', content: `故事：${story.title}\n世界：${(story.worldview.text || '').slice(0, 200)}\n角色表（含好感度档次）：${cast}\n近期剧情：${(story.chat.summary || '').slice(0, 300) || '（刚开始）'}\n\n请根据以上剧情与各角色好感度、性格，判断谁最该主动，生成TA的主动消息。` }
     ];
   }
 

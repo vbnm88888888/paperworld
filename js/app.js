@@ -1163,7 +1163,8 @@
       npcById(id) { return this.story ? this.story.npcs.find(n => n.id === id) : null; },
       openWxApp() {
         this.phoneView = 'wx'; this.wxTab = 'chat';
-        if (!this._auto.wx) { this._auto.wx = true; this.proactiveWx(true); }
+        // 每次进入微信都可能有NPC主动发来消息（条数随机1~3），wxProBusy 防重入
+        this.proactiveWx(true);
       },
       openWbApp() {
         this.phoneView = 'weibo'; this.wbTab = 'feed';

@@ -53,15 +53,17 @@ window.PW = window.PW || {};
   /* ---------- 微信：NPC主动发消息 ---------- */
   async function proactiveWechat(story) {
     const memText = await memFor('微信 主动联系 ' + (story.chat.summary || '').slice(0, 80), ['wechat']);
+    /* 随机条数：1~3条随机，让每次进入都出现不同数量的主动消息，不固定三条 */
+    const count = 1 + Math.floor(Math.random() * 3);
     const { content } = await PW.Api.chat({
-      messages: PW.Prompts.proactiveChatPrompt(story, memText),
+      messages: PW.Prompts.proactiveChatPrompt(story, memText, count),
       stream: false, temperature: 1.3
     });
     const obj = parseJsonLoose(content); // 可能抛错，由调用方处理
     const npc = findNpc(story, obj.npc) || (story.npcs || []).filter(x => x.present !== false)[0];
     if (!npc) throw new Error('没有可用的NPC');
     const list = story.phone.chats[npc.id] || (story.phone.chats[npc.id] = []);
-    const msgs = (obj.messages || []).slice(0, 4).map(t => ({
+    const msgs = (obj.messages || []).slice(0, count).map(t => ({
       id: PW.Store.uid('w'), role: 'npc', text: String(t).slice(0, 120), ts: Date.now(), proactive: true
     }));
     list.push(...msgs);
