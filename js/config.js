@@ -40,6 +40,8 @@ PW.DEFAULT_SETTINGS = {
   memoryMode: 'bm25',            // bm25 | semantic
   topK: PW.CONFIG.TOP_K,
   recentTurns: PW.CONFIG.RECENT_TURNS,
+  ctxMax: 20,                    // 上下文token上限(千)：估算超过则压缩最旧部分
+  ctxMin: 14,                    // 上下文token下限(千)：压缩到低于此值为止
   customModels: [],              // 用户自定义模型ID
   plotFont: 17,                  // 剧情字号 px
   bg: { img: '', opacity: 0.35, blur: 0 },  // 自定义背景

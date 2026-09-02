@@ -81,7 +81,10 @@ ${npcCards}`;
 ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0, 160) + '…' : m.text}`).join('\n')}`;
     }
 
-    /* L2 滚动摘要：已停用（改为剧情全量原文，避免压缩丢细节） */
+    /* L2 溢出压缩：仅当剧情全量原文超过上下文上限时,最旧部分被压缩进这里 */
+    if (layers.summary) {
+      sys += `\n【前情提要】（剧情过长时被压缩的最旧部分）\n${layers.summary}`;
+    }
 
     /* 输出格式协议 */
     if (story.useNineFormat) {
@@ -151,15 +154,17 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 
   /* ---------- 组装完整请求 ---------- */
   async function build(story, userInput, retrieved) {
-    /* 不做 L2 压缩摘要：窗口从0开始全量携带剧情原文，防止"前情提要"压缩丢失细节 */
-    const windowStart = 0;
+    const msgs = story.chat.messages;
+    // 默认全量携带剧情原文(防漏细节)；仅当超出上下文上限被压缩后,越过已压缩进前情提要去的最旧部分
+    const summarized = story.chat.summarizedUntil || 0;
+    const windowStart = Math.min(summarized, msgs.length);
 
     const layers = {
       memories: (retrieved || []).map(h => ({
         label: h.label,
         text: h.rec.text
       })),
-      summary: ''   // 前情提要已停用
+      summary: story.chat.summary || ''
     };
 
     const messages = [{ role: 'system', content: gmSystem(story, layers) }];

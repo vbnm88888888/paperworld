@@ -670,15 +670,20 @@
           this.toast('已切换为关键词检索', '🔑');
         }
       },
+      /* 估算从第 fromIdx 条起(含前情提要+后续全量原文+记忆)的上下文token */
+      ctxEstFrom(fromIdx) {
+        if (!this.story) return 0;
+        const story = this.story;
+        const s = PW.Prompts.gmSystem(story, { memories: [], summary: story.chat.summary || '' });
+        const msgs = story.chat.messages;
+        let est = PW.Store.estTokens(s);
+        for (let i = fromIdx; i < msgs.length; i++) est += PW.Store.estTokens(msgs[i].raw || msgs[i].text || '');
+        est += this.settings.topK * 45;
+        return est;
+      },
       computeCtxEst() {
         if (!this.story) return 0;
-        const s = PW.Prompts.gmSystem(this.story, { memories: [], summary: '' });
-        const msgs = this.story.chat.messages;
-        /* L2 前情提要已停用：剧情全量原文都计入上下文估算 */
-        let est = PW.Store.estTokens(s);
-        msgs.forEach(m => { est += PW.Store.estTokens(m.raw || m.text || ''); });
-        est += this.settings.topK * 45;
-        return Math.round(est);
+        return this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
       },
 
       /* ---------- 剧情核心 ---------- */
@@ -908,6 +913,7 @@
           this.busy = false; this.streamText = ''; this.abortCtl = null;
           this.lastCtxEst = this.computeCtxEst();
           this.scrollBottom();
+          this.watchContext(); // 异步检查上下文是否超上限，必要时压缩最旧部分
         }
       },
       stopStream() {
@@ -985,11 +991,69 @@
           }
         });
       },
-      async doSummary(force) {
-        /* L2 前情提要已停用：剧情全量原文进上下文，避免压缩丢失细节。保留空实现以兼容旧调用。 */
+      async doSummary(targetEst) {
+        /* 溢出压缩：剧情全量原文超上限时，把最旧的、不在 recentTurns 保底区内的消息压缩进前情提要。
+         * 返回是否真的压缩了一段。targetEst 为要压缩到的目标token数(8500=8500)，不传则少压一点即可见安全差额。 */
+        if (this.summarizing || !this.settings.apiKey) return false;
+        this.summarizing = true;
+        try {
+          const story = this.story;
+          const msgs = story.chat.messages;
+          const keep = this.settings.recentTurns || 0;
+          const until = story.chat.summarizedUntil || 0;
+          const cutMax = Math.max(until, msgs.length - keep); // 最近keep条永不压缩
+          if (cutMax <= until) return false;
+          if (targetEst == null || !(targetEst > 0)) return false;
+          const estNow = this.ctxEstFrom(until);
+          const need = estNow - targetEst;
+          if (need <= 0) return false;
+          let acc = 0, cut = until;
+          while (cut < cutMax && acc < need) {
+            acc += PW.Store.estTokens(msgs[cut].raw || msgs[cut].text || '');
+            cut++;
+          }
+          const slice = msgs.slice(until, cut);
+          if (!slice.length) return false;
+          const texts = slice.map(m =>
+            m.kind === 'me' ? `玩家：${m.text}` :
+            m.kind === 'ai' ? 'GM：' + (m.raw || m.text).slice(0, 140) :
+            m.text
+          ).join('\n');
+          const { content } = await PW.Api.chat({
+            messages: PW.Prompts.summaryPrompt(story, story.chat.summary, texts),
+            stream: false, temperature: 0.6
+          });
+          if (content && content.trim().length >= PW.CONFIG.MIN_SUMMARY_LEN) {
+            story.chat.summary = content.trim();
+            story.chat.summarizedUntil = cut;
+            return true;
+          }
+          return false;
+        } catch (e) { return false; }
+        finally { this.summarizing = false; }
+      },
+      async watchContext() {
+        /* 每次生成后检查：估算是否超过 ctxMax 上限。超过则把最旧部分压缩进前情提要，直到 ≤ ctxMin。 */
+        if (!this.story || !this.settings.apiKey) return;
+        const max = (this.settings.ctxMax || 0) * 1000;
+        const min = (this.settings.ctxMin || 0) * 1000;
+        if (!max) return;
+        const target = min && min < max ? min : max;
+        let est = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
+        let compressed = 0, guard = 0;
+        while (est > max && guard < 20) {
+          const done = await this.doSummary(target);
+          if (!done) break;
+          compressed++;
+          est = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
+          guard++;
+        }
+        if (compressed) this.toast('剧情过长：已将最旧部分压缩进前情提要，防止上下文超限', '🧠');
+        this.lastCtxEst = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
       },
       async resummarize() {
-        this.toast('前情提要已停用：剧情全程携带原文，不会丢失细节', '📜');
+        await this.watchContext();
+        if (!this.summarizing) this.toast('已按当前上下文上限检查完毕', '📜');
       },
 
       /* ---------- 消息操作 ---------- */

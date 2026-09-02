@@ -284,11 +284,11 @@
           <button class="btn danger block" style="margin-bottom:14px" @click="clearMemAll">🗑 清空本故事全部记忆</button>
 
           <div class="summary-card">
-            <div class="s-head"><b>📜 前情提要（已停用自动压缩）</b>
+            <div class="s-head"><b>📜 前情提要（超上限才压缩）</b>
               <button class="btn sm ghost" @click="mem.summaryEdit=!mem.summaryEdit">{{ mem.summaryEdit ? '完成' : '编辑' }}</button>
             </div>
             <textarea v-if="mem.summaryEdit" class="inp" v-model="story.chat.summary" style="min-height:120px" placeholder="可手动写剧情笔记（可选）"></textarea>
-            <div v-else class="s-body">{{ story.chat.summary || '已停用自动摘要：剧情全程携带原文，避免压缩丢失细节。这里可手动写笔记。' }}</div>
+            <div v-else class="s-body">{{ story.chat.summary || '剧情默认全量携带原文。只有超过「上下文上限」时，最旧部分才会被压缩成这份前情提要。' }}</div>
           </div>
 
           <div class="sec-title">检索测试 <span class="line"></span></div>
@@ -676,8 +676,16 @@
           <input type="range" min="3" max="12" step="1" v-model.number="settings.topK" style="width:130px">
         </div>
         <div class="set-row">
-          <div class="s-label"><b>短期记忆 {{ settings.recentTurns }} 条</b><span>最近多少条消息保持原文</span></div>
+          <div class="s-label"><b>短期记忆 {{ settings.recentTurns }} 条</b><span>最近多少条消息始终保留原文、绝不压缩</span></div>
           <input type="range" min="6" max="40" step="2" v-model.number="settings.recentTurns" style="width:130px">
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>上下文上限 {{ settings.ctxMax }}k tokens</b><span>剧情全量原文，估算超过此值时把最旧部分压缩</span></div>
+          <input type="range" min="8" max="64" step="1" v-model.number="settings.ctxMax" style="width:130px">
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>压缩到下限 {{ settings.ctxMin }}k tokens</b><span>超限后连续压缩，直到低于此值</span></div>
+          <input type="range" min="4" max="48" step="1" v-model.number="settings.ctxMin" style="width:130px">
         </div>
       </div>
 
