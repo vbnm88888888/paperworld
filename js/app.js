@@ -6,6 +6,7 @@
     data() {
       return {
         view: 'shelf',
+        pwBuild: (window.PW && PW.BUILD) || 'dev',
         stories: [],
         settings: Object.assign({}, PW.DEFAULT_SETTINGS),
         story: null,
@@ -998,10 +999,15 @@
         // 只要该消息没有任何用户锁定的分区，就重新解析修复，避免读到陈旧缓存
         if (!m.parts) {
           m.parts = this.parseParts(m.raw || m.text || '');
-        } else if (!m.parts.some(p => p.locked) && !m.parts.some(p => p.key === 'story')) {
+        } else if (!m.parts.length || (!m.parts.some(p => p.locked) && !m.parts.some(p => p.key === 'story'))) {
           m.parts = this.parseParts(m.raw || m.text || '');
         }
         return m.parts;
+      },
+      /* 自救按钮：手动强制按最新解析器重解析本条（修复旧版本缓存出的空分区） */
+      forceReparse(m) {
+        m.parts = this.parseParts(m.raw || m.text || '');
+        this._aiCache.delete(m.id);
       },
       /* 正文分区 → 头像气泡渲染（复用 parseAiBlocks） */
       storyBlocks(md) {
@@ -1884,5 +1890,6 @@
     try { window.__VUE_ERR = { msg: String(err && err.message), info: String(info), comp: inst && inst.type && (inst.type.name || (inst.type.__name)) || '' }; } catch (e2) {}
     console.error('[vue-err]', err, info, inst);
   };
+  console.log('[纸上人间] build', PW.BUILD);
   app.mount('#app');
 })();

@@ -258,6 +258,15 @@ html.has-bg .beat { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8p
 }
 .nf-foot:active { color: var(--acc); background: color-mix(in srgb, var(--acc) 7%, transparent); }
 
+/* 解析失败自救条：本条一条分区都没解析出来时可见 */
+.nf-warn {
+  margin: 4px 0 2px; padding: 8px 12px; border-radius: 12px;
+  font-size: 12px; line-height: 1.5; cursor: pointer;
+  color: #b45309; background: rgba(245, 158, 11, .12);
+  border: 1px dashed rgba(245, 158, 11, .45);
+}
+.nf-warn:active { background: rgba(245, 158, 11, .22); }
+
 .nf-edit { width: 100%; min-height: 130px; font-size: 14px; line-height: 1.7; }
 .nf-edit-ops { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
 

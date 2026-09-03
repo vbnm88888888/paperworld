@@ -3,6 +3,7 @@
 .shelf-hero { padding: calc(env(safe-area-inset-top) + 18px) 18px 6px; }
 .shelf-hero h1 { font-size: 24px; font-weight: 800; letter-spacing: 1px; }
 .shelf-hero p { color: var(--ink2); font-size: 13px; margin-top: 2px; }
+.build-tag { font-size: 10px !important; opacity: .5; letter-spacing: .5px; user-select: all; }
 
 .shelf-grid {
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;

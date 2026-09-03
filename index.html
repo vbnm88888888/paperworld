@@ -7,13 +7,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>纸上人间 · AI文字模拟游戏</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
-  <link rel="stylesheet" href="css/base.css?v=2">
-  <link rel="stylesheet" href="css/shelf.css?v=2">
-  <link rel="stylesheet" href="css/story.css?v=2">
-  <link rel="stylesheet" href="css/npc.css?v=2">
-  <link rel="stylesheet" href="css/editor.css?v=2">
-  <link rel="stylesheet" href="css/phone.css?v=2">
-  <script src="js/vendor/vue.global.prod.js?v=2"></script>
+  <link rel="stylesheet" href="css/base.css?v=3">
+  <link rel="stylesheet" href="css/shelf.css?v=3">
+  <link rel="stylesheet" href="css/story.css?v=3">
+  <link rel="stylesheet" href="css/npc.css?v=3">
+  <link rel="stylesheet" href="css/editor.css?v=3">
+  <link rel="stylesheet" href="css/phone.css?v=3">
+  <script src="js/vendor/vue.global.prod.js?v=3"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -32,6 +32,7 @@
     <div class="shelf-hero">
       <h1>我的书架</h1>
       <p>每个故事都是一场可以反复改写的梦</p>
+      <p class="build-tag">build {{ pwBuild }}</p>
     </div>
 
     <div class="shelf-grid" v-if="stories.length">
@@ -172,6 +173,10 @@
                       </div>
                     </template>
                     <div class="nf-foot" @click="addPart(m)">＋ 添加分区</div>
+                    <!-- 自救：本条一条分区都没解析出来时，给出可见警示与一键修复（旧版缓存/解析异常不再静默） -->
+                    <div class="nf-warn" v-if="!beatStoryPart(m) && !intelParts(m).length"
+                         @click="forceReparse(m)"
+                         title="用最新解析器重新生成本条分区">⚠️ 本条未解析出分区（原文 {{ String(m.raw || m.text || '').length }} 字）· 点此强制重新解析</div>
                   </div>
                 </template>
                 <template v-else>
@@ -797,6 +802,7 @@
     <div class="modal">
       <button class="close-x" @click="showSettings=false">✕</button>
       <h3>⚙️ 设置</h3>
+      <div class="build-tag" style="text-align:center;opacity:.55;font-size:11px;margin:-6px 0 8px">build {{ pwBuild }}</div>
       <div class="set-group">
         <div class="set-row" style="flex-direction:column;align-items:stretch">
           <div class="s-label" style="margin-bottom:6px"><b>DeepSeek API Key</b><span>仅保存在本机浏览器，不会上传</span></div>
@@ -1202,16 +1208,16 @@
   <div class="aff-fx" v-for="fx in affFxList" :key="fx.id" :style="fx.style">{{ fx.text }}</div>
 </div>
 
-<script src="js/config.js?v=2"></script>
-<script src="js/templates.js?v=2"></script>
-<script src="js/store.js?v=2"></script>
-<script src="js/api.js?v=2"></script>
-<script src="js/rag.js?v=2"></script>
-<script src="js/prompts.js?v=2"></script>
-<script src="js/avatars.js?v=2"></script>
-<script src="js/affinity.js?v=2"></script>
-<script src="js/randomnpc.js?v=2"></script>
-<script src="js/phone.js?v=2"></script>
-<script src="js/app.js?v=2"></script>
+<script src="js/config.js?v=3"></script>
+<script src="js/templates.js?v=3"></script>
+<script src="js/store.js?v=3"></script>
+<script src="js/api.js?v=3"></script>
+<script src="js/rag.js?v=3"></script>
+<script src="js/prompts.js?v=3"></script>
+<script src="js/avatars.js?v=3"></script>
+<script src="js/affinity.js?v=3"></script>
+<script src="js/randomnpc.js?v=3"></script>
+<script src="js/phone.js?v=3"></script>
+<script src="js/app.js?v=3"></script>
 </body>
 </html>
