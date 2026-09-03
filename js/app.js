@@ -984,13 +984,23 @@
             if (lines.length > 1) { extra.push(...lines.slice(1)); p.md = lines[0]; }
           });
           const extraText = extra.join('\n').replace(/^\s+|\s+$/g, '');
-          if (extraText) out.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: extraText, locked: false });
+          /* 终极兜底：任何情况下都保证存在"正文"分区，杜绝"只剩添加分区"的空屏 */
+          const restText = out.map(p => String(p.md || '').trim()).filter(Boolean).join('\n\n').trim();
+          if (extraText || restText || clean.trim()) {
+            out.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: extraText || restText || clean.trim() || '…', locked: false });
+          }
         }
         if (!out.length) out.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: clean.trim() || '…', locked: false });
         return out;
       },
       nfParts(m) {
-        if (!m.parts) m.parts = this.parseParts(m.raw || m.text || '');
+        // 旧版本缓存的 parts 可能缺失"正文"分区（表现为只剩"＋ 添加分区"）；
+        // 只要该消息没有任何用户锁定的分区，就重新解析修复，避免读到陈旧缓存
+        if (!m.parts) {
+          m.parts = this.parseParts(m.raw || m.text || '');
+        } else if (!m.parts.some(p => p.locked) && !m.parts.some(p => p.key === 'story')) {
+          m.parts = this.parseParts(m.raw || m.text || '');
+        }
         return m.parts;
       },
       /* 正文分区 → 头像气泡渲染（复用 parseAiBlocks） */
@@ -1870,5 +1880,9 @@
     }
   });
 
+  app.config.errorHandler = (err, inst, info) => {
+    try { window.__VUE_ERR = { msg: String(err && err.message), info: String(info), comp: inst && inst.type && (inst.type.name || (inst.type.__name)) || '' }; } catch (e2) {}
+    console.error('[vue-err]', err, info, inst);
+  };
   app.mount('#app');
 })();
