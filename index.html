@@ -108,50 +108,8 @@
               <template v-else-if="m.kind==='ai'">
                 <template v-if="story.useNineFormat">
                   <div class="beat">
-                    <!-- 竖屏/小屏：现状 9 卡 -->
-                    <template v-if="!isWide">
-                      <div class="nf-card" v-for="(p, pi) in nfParts(m)" :key="m.id+':'+pi" :class="'nf-'+p.key">
-                        <div class="nf-head" @click="togglePart(m,p)">
-                          <span class="nf-ico">{{ p.icon }}</span>
-                          <span class="nf-title">{{ p.title }}</span>
-                          <span class="nf-lock" v-if="p.locked" title="已锁定：后续生成会沿用">🔒</span>
-                          <span class="nf-chev" :class="{off: isPartCollapsed(m,p)}">▾</span>
-                          <span class="nf-ops" @click.stop>
-                            <button v-if="!isPartEditing(m,p)" @click="editPart(m,p)" title="编辑本分区">✎</button>
-                            <button v-if="!isPartEditing(m,p) && p.key==='story'" @click="rerollPart(m,p)" title="只重写本分区">↻</button>
-                            <button v-if="!isPartEditing(m,p)" @click="delPart(m,p)" title="删除本分区">✕</button>
-                          </span>
-                        </div>
-                        <div class="nf-body" v-if="!isPartCollapsed(m,p)">
-                          <template v-if="isPartEditing(m,p)">
-                            <textarea class="inp nf-edit" v-model="_partEdit.text" rows="8" placeholder="编辑本分区内容（Markdown）…"></textarea>
-                            <div class="nf-edit-ops">
-                              <button class="btn sm primary" @click="savePart">✔ 保存并锁定</button>
-                              <button class="btn sm" @click="cancelPart">取消</button>
-                            </div>
-                          </template>
-                          <template v-else-if="p.key==='story'">
-                            <template v-for="(b, bi) in storyBlocks(p.md)" :key="bi">
-                              <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
-                              <div v-else-if="b.type==='say'" class="say">
-                                <div class="avatar">
-                                  <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
-                                  <template v-else>{{ npcAvEmoji(b.name) }}</template>
-                                </div>
-                                <div class="body">
-                                  <div class="name">{{ b.name }}</div>
-                                  <div class="bubble" v-html="md(b.text)"></div>
-                                </div>
-                              </div>
-                              <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
-                            </template>
-                          </template>
-                          <div v-else class="nf-md" v-html="mdDoc(p.md)"></div>
-                        </div>
-                      </div>
-                    </template>
-                    <!-- 横屏：舞台模式（正文流 + 折叠情报面板） -->
-                    <template v-else>
+                    <!-- 橙光式舞台：正文流 + 折叠情报面板（横竖统一） -->
+                    <template>
                       <div class="nf-card nf-story beat-main" v-if="beatStoryPart(m)">
                         <div class="nf-head" @click="togglePart(m,beatStoryPart(m))">
                           <span class="nf-ico">{{ beatStoryPart(m).icon }}</span>
@@ -267,38 +225,8 @@
             <div class="msg" v-if="busy">
               <template v-if="story.useNineFormat">
                 <div class="beat">
-                  <!-- 竖屏：9卡流式 -->
-                  <template v-if="!isWide">
-                    <div class="nf-card" v-for="(p, pi) in streamNfParts" :key="'s'+pi" :class="'nf-'+p.key">
-                      <div class="nf-head">
-                        <span class="nf-ico">{{ p.icon }}</span>
-                        <span class="nf-title">{{ p.title }}</span>
-                        <span class="nf-chev">▾</span>
-                      </div>
-                      <div class="nf-body">
-                        <template v-if="p.key==='story'">
-                          <template v-for="(b, bi) in storyBlocks(p.md)" :key="bi">
-                            <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
-                            <div v-else-if="b.type==='say'" class="say">
-                              <div class="avatar">
-                                <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
-                                <template v-else>{{ npcAvEmoji(b.name) }}</template>
-                              </div>
-                              <div class="body">
-                                <div class="name">{{ b.name }}</div>
-                                <div class="bubble" v-html="md(b.text)"></div>
-                              </div>
-                            </div>
-                            <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
-                          </template>
-                        </template>
-                        <div v-else class="nf-md" v-html="mdDoc(p.md)"></div>
-                        <span v-if="pi===streamNfParts.length-1" class="cursor-blink"></span>
-                      </div>
-                    </div>
-                  </template>
-                  <!-- 横屏：舞台流式（正文 + 情报折叠） -->
-                  <template v-else>
+                  <!-- 橙光式舞台流式（正文 + 情报折叠，横竖统一） -->
+                  <template>
                     <div class="nf-card nf-story beat-main" v-if="streamStoryPart">
                       <div class="nf-head">
                         <span class="nf-ico">{{ streamStoryPart.icon }}</span>
@@ -818,7 +746,7 @@
       </div>
 
       <!-- 右侧剧情日志（横屏舞台模式） -->
-      <aside class="log-panel" v-if="tab==='plot' && story.useNineFormat" :class="{collapsed: !logOpen}">
+      <aside class="log-panel" v-if="tab==='plot' && story.useNineFormat && isWide" :class="{collapsed: !logOpen}">
         <div class="log-head" @click="logOpen=!logOpen">
           <span class="log-ico">📜</span>
           <b>剧情日志</b>
@@ -834,6 +762,26 @@
           <div class="log-empty" v-if="!logEntries.length">暂无剧情节拍</div>
         </div>
       </aside>
+      </div>
+
+      <!-- 竖屏：剧情日志浮动按钮 + 底部抽屉 -->
+      <button class="log-fab" v-if="tab==='plot' && story.useNineFormat && !isWide" @click="openLogDrawer()" title="剧情日志">
+        <span class="log-ico">📜</span><i v-if="logEntries.length">{{ logEntries.length }}</i>
+      </button>
+      <div class="log-mask" v-if="logDrawer" @click="logDrawer=false"></div>
+      <div class="log-drawer" :class="{open: logDrawer}" v-if="tab==='plot' && story.useNineFormat && !isWide">
+        <div class="log-drawer-head">
+          <span class="log-ico">📜</span><b>剧情日志</b><span class="log-count">{{ logEntries.length }}</span>
+          <button class="close-x" @click="logDrawer=false">✕</button>
+        </div>
+        <div class="log-list" ref="logList">
+          <button class="log-item" v-for="(e, ei) in logEntries" :key="e.id" @click="logDrawer=false; jumpToBeat(e.id)">
+            <span class="log-time" v-if="e.time">{{ e.time }}</span>
+            <span class="log-scene" v-if="e.scene">{{ e.scene }}</span>
+            <span class="log-text">{{ e.first }}</span>
+          </button>
+          <div class="log-empty" v-if="!logEntries.length">暂无剧情节拍</div>
+        </div>
       </div>
 
       <!-- 剧情工具条 + 输入区 -->

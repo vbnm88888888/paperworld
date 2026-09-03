@@ -27,7 +27,8 @@
         _partEdit: null,    // {msg, part, text} 正在编辑的分区
         isWide: false,      // 横屏/桌面模式：驱动「舞台+日志」双模板
         logOpen: true,      // 右侧剧情日志展开/折叠
-        streamIntelOpen: true, // 横屏流式：情报面板展开/折叠
+        logDrawer: false,   // 竖屏：剧情日志抽屉开关
+        streamIntelOpen: false, // 流式：情报面板展开/折叠（默认收起）
 
         /* 书架/向导 */
         showSettings: false,
@@ -243,11 +244,17 @@
     mounted() {
       PW.App = this;
       if (!this.settings.guideSeen) { this.guide.open = true; }
-      /* 横屏/桌面模式（与 CSS @media min-width:900px 同步） */
+      /* 横屏/舞台模式（与 CSS @media min-width:700px 同步）：手机横屏也进入三栏舞台 */
       try {
-        this._mqWide = window.matchMedia('(min-width: 900px)');
+        this._mqWide = window.matchMedia('(min-width: 700px)');
         this.isWide = this._mqWide.matches;
-        this._mqWide.addEventListener('change', e => { this.isWide = e.matches; if (!e.matches) this.logOpen = true; });
+        /* 手机窄横屏(700~899)默认收起右侧日志，桌面/平板宽横屏(≥900)默认展开 */
+        this.logOpen = this.isWide && window.innerWidth >= 900;
+        this._mqWide.addEventListener('change', e => {
+          this.isWide = e.matches;
+          if (!e.matches) { this.logOpen = true; this.logDrawer = false; }
+          if (e.matches) { this.logDrawer = false; }
+        });
       } catch (e) { /* 老浏览器忽略 */ }
     },
 
@@ -1016,9 +1023,17 @@
       beatStoryPart(m) { return (this.nfParts(m) || []).find(p => p.key === 'story') || null; },
       isIntelCollapsed(m) {
         const k = m.id + ':intel';
-        return this._collapsed[k] !== undefined ? this._collapsed[k] : this.isWide;
+        return this._collapsed[k] !== undefined ? this._collapsed[k] : true;  // 情报默认收起，保持正文清爽
       },
       toggleIntel(m) { const k = m.id + ':intel'; this._collapsed[k] = !this.isIntelCollapsed(m); },
+      /* 竖屏：打开剧情日志抽屉并滚动到底部 */
+      openLogDrawer() {
+        this.logDrawer = true;
+        this.$nextTick(() => {
+          const el = this.$refs.logList;
+          if (el) el.scrollTop = el.scrollHeight;
+        });
+      },
       jumpToBeat(id) {
         const el = document.querySelector('.msg[data-mid="' + id + '"]');
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
