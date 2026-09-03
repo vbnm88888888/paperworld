@@ -181,6 +181,14 @@ html.has-bg .md-doc {
 }
 html.has-bg .beat { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 
+/* 流式开始、正文尚未解析出来时的占位（避免空白的白色方块） */
+.beat-loading {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 56px; padding: 14px;
+  color: var(--ink2); font-size: 14px; font-weight: 600;
+}
+.beat-loading .gen-hint { letter-spacing: .5px; }
+
 .nf-card {
   margin: 8px 0; border-radius: 14px; overflow: hidden;
   background: var(--card);

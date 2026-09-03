@@ -943,28 +943,50 @@
           .replace(/\r/g, '')
           .replace(/\n{3,}/g, '\n\n');
         const out = [];
-        let cur = null, pre = '';
+        let cur = null;
+        const preStory = [];   // 尚未落入任何分区的正文（AI 未输出【正文】头或先写了正文），绝不丢弃
         const flush = () => {
           if (cur) {
-            const md = (pre + cur.md).replace(/^\s+|\s+$/g, '');
-            pre = '';
-            if (md) out.push({ key: cur.key, title: cur.title, icon: cur.icon, md, locked: false });
+            const mmd = cur.md.replace(/^\s+|\s+$/g, '');
+            if (mmd) out.push({ key: cur.key, title: cur.title, icon: this.partDef(cur.key).icon, md: mmd, locked: false });
+            cur = null;
           }
         };
         for (const raw of clean.split('\n')) {
-          const h = raw.trim().match(/^(?:\d+\s*[.、．]\s*)?【([^】]+)】\s*$/);
+          // 支持独立行标题与行内标题（含序号前缀，如 "2.【当前场景】..." / "**【时间】**..."）
+          const h = raw.trim().match(/^(?:\d+\s*[.、．]\s*)?\*?_?\*?\s*【([^】]+)】\s*\*?_?\*?\s*(.*)$/);
           if (h) {
-            flush();
             const title = h[1].trim();
-            const key = this.partKeyOfTitle(title);
-            cur = key ? { key, title, icon: this.partDef(key).icon, md: '' } : null;
+            const key = this.partKeyOfTitle(title) || 'story'; // 未知标题回落到正文，避免内容丢失
+            flush();
+            cur = { key, title, icon: this.partDef(key).icon, md: '' };
+            const rest = h[2].trim();
+            if (rest) cur.md += rest + '\n';
             continue;
           }
           if (cur) cur.md += raw + '\n';
-          else pre += raw + '\n';
+          else preStory.push(raw);
         }
         flush();
-        if (!out.length) out.push({ key: 'story', title: '正文内容', icon: this.partDef('story').icon, md: clean.trim() || '…', locked: false });
+        // 未落入分区的正文 → 合并进 story，防止只剩"添加分区"的空白
+        const preText = preStory.join('\n').replace(/^\s+|\s+$/g, '');
+        if (preText) {
+          const existing = out.find(p => p.key === 'story');
+          if (existing) existing.md = (preText + '\n' + existing.md).trim();
+          else out.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: preText, locked: false });
+        }
+        /* AI 漏输出【正文】头时，时间/场景分区可能被正文污染，把多余行抽出来当正文 */
+        if (!out.some(p => p.key === 'story')) {
+          const extra = [];
+          out.forEach(p => {
+            if (p.key !== 'time' && p.key !== 'scene') return;
+            const lines = String(p.md).split('\n');
+            if (lines.length > 1) { extra.push(...lines.slice(1)); p.md = lines[0]; }
+          });
+          const extraText = extra.join('\n').replace(/^\s+|\s+$/g, '');
+          if (extraText) out.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: extraText, locked: false });
+        }
+        if (!out.length) out.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: clean.trim() || '…', locked: false });
         return out;
       },
       nfParts(m) {

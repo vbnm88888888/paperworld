@@ -217,7 +217,7 @@
             <!-- 流式输出中 -->
             <div class="msg" v-if="busy">
               <template v-if="story.useNineFormat">
-                <div class="beat">
+                <div class="beat" v-if="streamStoryPart || streamIntelParts.length">
                   <!-- 橙光式舞台流式（正文 + 情报折叠，横竖统一） -->
                   <template>
                     <div class="nf-card nf-story beat-main" v-if="streamStoryPart">
@@ -263,6 +263,10 @@
                       </div>
                     </div>
                   </template>
+                </div>
+                <div class="beat beat-loading" v-else>
+                  <span class="gen-hint">🎲 正在生成剧情…</span>
+                  <span class="cursor-blink"></span>
                 </div>
               </template>
               <template v-else>
