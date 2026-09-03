@@ -25,6 +25,9 @@
         /* 九段式界面 */
         _collapsed: {},     // 分区折叠：key = msgId:partKey
         _partEdit: null,    // {msg, part, text} 正在编辑的分区
+        isWide: false,      // 横屏/桌面模式：驱动「舞台+日志」双模板
+        logOpen: true,      // 右侧剧情日志展开/折叠
+        streamIntelOpen: true, // 横屏流式：情报面板展开/折叠
 
         /* 书架/向导 */
         showSettings: false,
@@ -137,6 +140,14 @@
         if (!(this.story && this.story.useNineFormat)) return [];
         return this.parseParts(this.streamText || '');
       },
+      /* 横屏流式：正文分区 / 情报分区拆分 */
+      streamStoryPart() {
+        return (this.streamNfParts || []).find(p => p.key === 'story') || null;
+      },
+      streamIntelParts() {
+        const keys = ['map', 'cast', 'schedule', 'explore', 'aside', 'mind'];
+        return (this.streamNfParts || []).filter(p => keys.indexOf(p.key) >= 0);
+      },
       /* 顶部吸顶状态栏：从最新AI消息分区提取 时间/场景/天数/在场好感度 */
       statusBar() {
         if (!this.story) return null;
@@ -161,6 +172,32 @@
         if (!out.cast.length) {
           (this.story.npcs || []).filter(n => n.present !== false).forEach(n => {
             out.cast.push({ name: n.name, aff: n.affinity == null ? 50 : n.affinity, src: this.npcAvSrc(n.name), emoji: this.npcAvEmoji(n.name) });
+          });
+        }
+        return out;
+      },
+      /* 右侧剧情日志：每条AI节拍 = 时间/场景/首行正文摘要 */
+      logEntries() {
+        if (!this.story || !this.story.useNineFormat) return [];
+        const out = [];
+        for (const m of this.story.chat.messages) {
+          if (m.kind !== 'ai') continue;
+          const parts = this.nfParts(m);
+          if (!parts || !parts.length) continue;
+          const tp = parts.find(p => p.key === 'time');
+          const sp = parts.find(p => p.key === 'scene');
+          const st = parts.find(p => p.key === 'story');
+          let first = '';
+          if (st) {
+            const blocks = this.storyBlocks(st.md);
+            const b = blocks.find(x => x.type === 'say') || blocks.find(x => x.type === 'narr');
+            if (b) first = (b.type === 'say' ? b.name + '：' : '') + b.text;
+          }
+          out.push({
+            id: m.id,
+            time: tp ? ((tp.md.match(/\[\s*([^\]]+?)\s*\]/) || [])[1] || '') : '',
+            scene: sp ? ((sp.md.match(/\[\s*([^\]]+?)\s*\]/) || [])[1] || '') : '',
+            first: first.replace(/\s+/g, ' ').slice(0, 60)
           });
         }
         return out;
@@ -206,6 +243,12 @@
     mounted() {
       PW.App = this;
       if (!this.settings.guideSeen) { this.guide.open = true; }
+      /* 横屏/桌面模式（与 CSS @media min-width:900px 同步） */
+      try {
+        this._mqWide = window.matchMedia('(min-width: 900px)');
+        this.isWide = this._mqWide.matches;
+        this._mqWide.addEventListener('change', e => { this.isWide = e.matches; if (!e.matches) this.logOpen = true; });
+      } catch (e) { /* 老浏览器忽略 */ }
     },
 
     methods: {
@@ -964,7 +1007,156 @@
           .join('\n');
         return this.parseAiBlocks(clean);
       },
-      /* 从最新一条AI消息回写游戏状态机（时间/场景/天/探索/日程） */
+      /* ==================== 横屏舞台：情报面板 + 分区固定格式渲染 ==================== */
+      /* 情报分区（宽屏下折叠进「情报」面板；时间/场景进HUD，正文单独展示） */
+      intelParts(m) {
+        const keys = ['map', 'cast', 'schedule', 'explore', 'aside', 'mind'];
+        return (this.nfParts(m) || []).filter(p => keys.indexOf(p.key) >= 0);
+      },
+      beatStoryPart(m) { return (this.nfParts(m) || []).find(p => p.key === 'story') || null; },
+      isIntelCollapsed(m) {
+        const k = m.id + ':intel';
+        return this._collapsed[k] !== undefined ? this._collapsed[k] : this.isWide;
+      },
+      toggleIntel(m) { const k = m.id + ':intel'; this._collapsed[k] = !this.isIntelCollapsed(m); },
+      jumpToBeat(id) {
+        const el = document.querySelector('.msg[data-mid="' + id + '"]');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+      affBarStyleStr(v) {
+        const s = this.affBarStyle(v);
+        return 'left:' + s.left + ';width:' + s.width + ';background:' + s.background;
+      },
+      /* 分区渲染分发：未知/旧数据回落 mdDoc */
+      renderPartHTML(p) {
+        switch (p.key) {
+          case 'map': return this.renderMapPart(p);
+          case 'cast': return this.renderCastPart(p);
+          case 'schedule': return this.renderSchedulePart(p);
+          case 'explore': return this.renderExplorePart(p);
+          case 'aside': return this.renderAsidePart(p);
+          case 'mind': return this.renderMindPart(p);
+          default: return this.mdDoc(p.md);
+        }
+      },
+      /* 地图卡：emoji 行头逐行渲染（代码固定格式） */
+      renderMapPart(p) {
+        const rows = [];
+        (String(p.md || '').split('\n')).forEach(l => {
+          const m = l.trim().match(/^(🌟|🏛️|🛍️|🌳|👥|🔍)\s*(.*)$/);
+          if (m) rows.push({ e: m[1], body: m[2] });
+        });
+        if (rows.length < 2) return this.mdDoc(p.md);
+        const rowsHtml = rows.map(r => {
+          const sep = r.body.indexOf('：');
+          const label = sep > 0 ? r.body.slice(0, sep + 1) : '';
+          const val = sep > 0 ? r.body.slice(sep + 1) : r.body;
+          return '<div class="map-row"><span class="map-emoji">' + r.e + '</span>'
+            + (label ? '<span class="map-label">' + this.mdInline(label) + '</span>' : '')
+            + '<span class="map-val">' + this.mdInline(val) + '</span></div>';
+        }).join('');
+        return '<div class="card-map">' + rowsHtml + '</div>';
+      },
+      /* 人员卡：人数行 + 外貌描写 + 🔹 好感度进度条 */
+      renderCastPart(p) {
+        const md = String(p.md || '');
+        const affRe = /🔹\s*([^：:|\s]{1,16})[：:]\s*好感度\s*(-?\d+)\s*%?(?:\s*[\|｜]\s*状态[：:]\s*([^|\n]*))?(?:\s*[\|｜]\s*备注[：:]\s*([^\n]*))?/;
+        const affs = [];
+        const descs = [];
+        let count = '';
+        md.split('\n').forEach(l => {
+          const t = l.trim();
+          if (!t) return;
+          const cm = t.match(/\[(目前在场角色人数[^\]]*)\]/);
+          if (cm) { count = cm[1]; return; }
+          const am = t.match(affRe);
+          if (am) { affs.push({ name: am[1], v: parseInt(am[2], 10) || 0, state: (am[3] || '').trim(), note: (am[4] || '').trim() }); return; }
+          descs.push(t);
+        });
+        if (!affs.length && !count) return this.mdDoc(md);
+        let html = '<div class="card-cast">';
+        if (count) html += '<div class="cast-count">' + this.mdInline(count) + '</div>';
+        descs.forEach(d => { html += '<div class="cast-desc">' + this.mdInline(d) + '</div>'; });
+        if (affs.length) {
+          html += '<div class="cast-aff-title">好感度进度</div>';
+          affs.forEach(a => {
+            html += '<div class="fmt-aff-row"><span class="fan">' + this.mdInline(a.name) + '</span>'
+              + '<div class="abar"><i style="' + this.affBarStyleStr(a.v) + '"></i><span class="zero"></span></div>'
+              + '<span class="fav">' + a.v + '%</span>'
+              + '<span class="fas">' + this.mdInline([a.state, a.note].filter(Boolean).join('｜')) + '</span></div>';
+          });
+        }
+        return html + '</div>';
+      },
+      /* 日程卡：📅/⏰/💡/🌍 分组 + [ ]/✅ 复选框（代码固定格式） */
+      renderSchedulePart(p) {
+        const md = String(p.md || '');
+        const heads = { '📅': '日程', '⏰': '固定日程', '💡': '待办与机会', '🌍': '世界动态' };
+        const lines = md.split('\n');
+        if (!lines.some(l => /^(📅|⏰|💡|🌍)/.test(l.trim()))) return this.mdDoc(md);
+        const secs = [];
+        let cur = null;
+        lines.forEach(l => {
+          const t = l.trim();
+          if (!t) return;
+          const hm = t.match(/^(📅|⏰|💡|🌍)\s*(.*)$/);
+          if (hm) { cur = { ico: hm[1], title: heads[hm[1]] || hm[1], rows: [] }; secs.push(cur); if (hm[2]) cur.rows.push({ text: hm[2], done: null }); return; }
+          if (!cur) return;
+          const done = /^✅/.test(t) ? true : (/^\[\s*\]/.test(t) ? false : null);
+          const clean = t.replace(/^(✅|\[\s*\])\s*/, '');
+          cur.rows.push({ text: clean, done });
+        });
+        let html = '<div class="card-schedule">';
+        secs.forEach(s => {
+          html += '<div class="sch-sec"><div class="sch-sec-head">' + s.ico + ' ' + this.mdInline(s.title) + '</div>';
+          s.rows.forEach(r => {
+            const cls = r.done === true ? 'sch-item sch-done' : (r.done === false ? 'sch-item sch-todo' : 'sch-item');
+            const mark = r.done === true ? '☑' : (r.done === false ? '☐' : '');
+            html += '<div class="' + cls + '">' + (mark ? '<i>' + mark + '</i>' : '') + this.mdInline(r.text) + '</div>';
+          });
+          html += '</div>';
+        });
+        return html + '</div>';
+      },
+      /* 探索卡：✅/❓/🎉 状态行 */
+      renderExplorePart(p) {
+        const rows = [];
+        (String(p.md || '').split('\n')).forEach(l => {
+          const t = l.trim();
+          if (!t) return;
+          const info = t.match(/^情报更新[：:]\s*(.*)$/);
+          if (info) { rows.push({ cls: 'ex-info', text: '🎉 ' + info[1] }); return; }
+          const m = t.match(/^(✅|❓|🎉)\s*(.*)$/);
+          if (m) { rows.push({ cls: m[1] === '✅' ? 'ex-ok' : (m[1] === '❓' ? 'ex-q' : 'ex-info'), text: m[1] + ' ' + m[2] }); }
+        });
+        if (!rows.length) return this.mdDoc(p.md);
+        return '<div class="card-explore">'
+          + rows.map(r => '<div class="ex-row ' + r.cls + '">' + this.mdInline(r.text) + '</div>').join('') + '</div>';
+      },
+      /* 旁白卡：标签：内容 三行 */
+      renderAsidePart(p) {
+        const rows = [];
+        (String(p.md || '').split('\n')).forEach(l => {
+          const m = l.trim().match(/^(情节回溯|任务提示|系统自检)[：:]\s*(.*)$/);
+          if (m) rows.push({ label: m[1], body: m[2] });
+        });
+        if (!rows.length) return this.mdDoc(p.md);
+        return '<div class="card-aside">'
+          + rows.map(r => '<div class="aside-row"><b class="aside-label">' + this.mdInline(r.label) + '</b><span>' + this.mdInline(r.body) + '</span></div>').join('') + '</div>';
+      },
+      /* 心理卡：角色名：内容 逐行 */
+      renderMindPart(p) {
+        const md = String(p.md || '');
+        if (/\*\*|^\s*>/.test(md)) return this.mdDoc(md);   // 旧格式带markdown → 回落
+        const lines = md.split('\n').map(l => l.trim()).filter(Boolean);
+        if (!lines.length) return this.mdDoc(md);
+        return '<div class="card-mind">'
+          + lines.map(l => {
+            const m = l.match(/^([^：:]{1,12})[：:]\s*(.*)$/);
+            return '<div class="mind-line">' + (m ? '<span class="mind-name">' + this.mdInline(m[1]) + '</span>' : '') + this.mdInline(m ? m[2] : l) + '</div>';
+          }).join('') + '</div>';
+      },
+      /* 从最新一条AI消息回写游戏状态机（解析新版纯文本标记：[时间]/[场景]/第X天/✅探索） */
       updateSessionState(msg) {
         const story = this.story;
         if (!story || !msg) return;
@@ -1165,6 +1357,8 @@
         if (story.useNineFormat) {
           msg.parts = this.parseParts(sc.text);
           this.updateSessionState(msg);
+          /* 右侧剧情日志自动跟随最新节拍 */
+          this.$nextTick(() => { const l = this.$refs.logList; if (l) l.scrollTop = l.scrollHeight; });
         }
         this._aiCache.set(msg.id, this.aiBlocks(msg));
         /* 同步好感度（卡片模式/自定义格式模式通用） */
