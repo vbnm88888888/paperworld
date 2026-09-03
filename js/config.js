@@ -2,7 +2,7 @@
 window.PW = window.PW || {};
 
 /* 构建版本：界面可见（书架底部/设置页），用于确认手机加载的不是旧缓存 */
-PW.BUILD = '20260904-a';
+PW.BUILD = '20260904-b';
 
 PW.CONFIG = {
   APP_NAME: '纸上人间',

@@ -995,12 +995,27 @@
         return out;
       },
       nfParts(m) {
-        // 旧版本缓存的 parts 可能缺失"正文"分区（表现为只剩"＋ 添加分区"）；
-        // 只要该消息没有任何用户锁定的分区，就重新解析修复，避免读到陈旧缓存
-        if (!m.parts) {
+        /* 显示逻辑硬保证：无论消息数据处于何种状态（旧缓存/部分锁定/缺正文），
+           最终必须产出含"正文"分区的分区数组 —— 正文卡片永远渲染，杜绝只剩"添加分区" */
+        if (!m.parts || !m.parts.length) {
           m.parts = this.parseParts(m.raw || m.text || '');
-        } else if (!m.parts.length || (!m.parts.some(p => p.locked) && !m.parts.some(p => p.key === 'story'))) {
-          m.parts = this.parseParts(m.raw || m.text || '');
+          return m.parts;
+        }
+        if (!m.parts.some(p => p.key === 'story')) {
+          const locked = m.parts.filter(p => p.locked);            // 用户锁定的分区必须保留
+          const fresh = this.parseParts(m.raw || m.text || '');    // 按最新解析器全量重析
+          const merged = [];
+          for (const p of fresh) {
+            const l = locked.find(x => x.key === p.key);
+            merged.push(l || p);                                   // 同键以用户锁定版优先
+          }
+          for (const l of locked) {
+            if (!merged.some(x => x.key === l.key)) merged.push(l);
+          }
+          if (!merged.some(p => p.key === 'story')) {              // 终极保证：正文分区必然存在
+            merged.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: '…', locked: false });
+          }
+          m.parts = merged;
         }
         return m.parts;
       },
@@ -1569,6 +1584,7 @@
           { icon: '⚙️', label: '设置（API Key / 接口地址）', fn: () => { this.showSettings = true; } },
           { icon: '🧹', label: '清空剧情（保留设定与角色）', fn: () => this.askClearPlot() },
           { icon: '✏️', label: '重命名故事', fn: () => { this.msgEdit = { open: true, text: this.story.title, msg: null, target: 'story' }; } },
+          { icon: '🔧', label: '界面修复（重置分区显示）', fn: () => this.repairStoryUI() },
           { icon: '📚', label: '导出小说 txt', fn: () => PW.Store.exportStoryTxt(this.story) },
           { icon: '📄', label: '导出故事 JSON（含记忆）', fn: async () => {
               const st = JSON.parse(JSON.stringify(this.story));
@@ -1579,6 +1595,18 @@
           { icon: '🗑', label: '删除整个故事', danger: true, fn: () => this.askDelStory(this.story) }
         );
         this.sheet = { open: true, title: '', preview: '', items };
+      },
+
+      /* 一键重置剧情界面显示：全部消息按最新解析器重析 + 清空折叠状态 */
+      repairStoryUI() {
+        this._aiCache.clear();
+        this._collapsed = {};
+        let n = 0;
+        for (const m of (this.story.chat.messages || [])) {
+          if (m && m.kind === 'ai') { delete m.parts; n++; }
+        }
+        this.$forceUpdate();
+        this.toast('已重置 ' + n + ' 条消息的分区显示', '🔧');
       },
 
       askClearPlot() {
