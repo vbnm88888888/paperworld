@@ -170,13 +170,6 @@ html.has-bg .md-doc {
 .statusbar .sb-left { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .statusbar .sb-item { color: var(--ink2); font-weight: 700; white-space: nowrap; }
 .statusbar .sb-item.sb-scene { color: var(--acc); }
-.statusbar .sb-cast { display: flex; gap: 8px; align-items: center; flex: 1; justify-content: flex-end; flex-wrap: wrap; }
-.statusbar .sb-npc { display: inline-flex; align-items: center; gap: 5px; background: var(--card2); border-radius: 12px; padding: 2px 8px 2px 3px; }
-.statusbar .sb-npc .av { width: 20px; height: 20px; border-radius: 50%; overflow: hidden; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
-.statusbar .sb-npc .av img { width: 100%; height: 100%; object-fit: cover; }
-.statusbar .sb-npc .hbar { width: 34px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; display: inline-block; }
-.statusbar .sb-npc .hbar i { display: block; height: 100%; background: linear-gradient(90deg, var(--acc), var(--acc2)); border-radius: 2px; }
-.statusbar .sb-npc em { font-style: normal; font-size: 11px; color: var(--ink2); font-weight: 700; }
 
 /* 剧本节拍（一条AI回复 = 一组分区卡片） */
 .beat {
@@ -336,20 +329,12 @@ html.has-bg .beat { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8p
   color: #fff; font-size: 10px; display: flex; align-items: center; justify-content: center; padding: 0 4px;
 }
 
-/* ---------- 横屏舞台：剧情日志（右侧） ---------- */
+/* ---------- 剧情日志（底部抽屉复用） ---------- */
 .stage-row { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .story-main { flex: 1; min-width: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-.log-panel { display: none; overflow: hidden; background: var(--card); border-left: 1px solid var(--line); }
-.log-head {
-  display: flex; align-items: center; gap: 8px; padding: 12px 14px;
-  cursor: pointer; user-select: none; border-bottom: 1px solid var(--line);
-}
 .log-ico { font-size: 16px; }
-.log-head b { font-size: 14px; color: var(--ink); flex: 1; }
 .log-count { font-size: 11px; color: var(--ink3); background: var(--card2); border-radius: 10px; padding: 1px 8px; }
-.log-chev { font-size: 12px; color: var(--ink3); transition: transform .18s; }
-.log-chev.off { transform: rotate(-90deg); }
 .log-list { flex: 1; overflow-y: auto; padding: 8px; }
 .log-item {
   display: block; width: 100%; text-align: left; padding: 9px 11px;
@@ -465,37 +450,9 @@ html.has-bg .log-fab {
   box-shadow: var(--shadow);
 }
 
-/* ---------- 横屏舞台布局（手机横屏 700~899 紧凑版；桌面 ≥900 宽版） ---------- */
-@media (min-width: 700px) {
-  .story-view { flex-direction: row; }
-  .story-side { display: flex; flex-direction: column; justify-content: flex-end; order: -1; width: 64px; border-right: 1px solid var(--line); background: var(--card); padding-bottom: 0; }
-  .story-side .tabbar { flex-direction: column; border-top: none; width: 100%; padding-bottom: 0; }
-  .story-side .tab { padding: 12px 0; }
-  .story-side .tab .badge { right: 10px; top: 6px; }
-  .story-main-wrap { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  .inputbar { padding-bottom: 12px; }
-
-  /* 舞台 + 日志 横排 */
-  .stage-row { flex-direction: row; }
-  .story-main { flex: 1; min-width: 0; }
-  .log-panel { display: flex; flex-direction: column; flex-shrink: 0; width: 46px; }
-  .log-panel:not(.collapsed) { width: 230px; }
-  .log-panel.collapsed .log-list, .log-panel.collapsed .log-count, .log-panel.collapsed .log-head b { display: none; }
-
-  .beat-main.nf-story { border-left-width: 5px; }
-  .beat-main .nf-body { padding: 14px 18px; }
-  .beat-main .say .avatar { width: 44px; height: 44px; }
-  .beat-main .say .bubble { font-size: calc(var(--plot-font, 17px) + 1px); }
-  .beat-main .narr { font-size: calc(var(--plot-font, 17px) + 1px); }
-}
-
-/* 桌面/平板宽横屏：完整三栏 */
-@media (min-width: 900px) {
-  .story-side { width: 86px; }
-  .story-side .tab { padding: 14px 0; }
-  .story-side .tab .badge { right: 14px; top: 8px; }
-  .log-panel { width: 300px; }
-  .log-panel.collapsed { width: 48px; }
-  .msg-list { max-width: 900px; }
-  .beat { padding: 6px; }
-}
+/* ---------- 竖屏单一布局 ---------- */
+.beat-main.nf-story { border-left-width: 5px; }
+.beat-main .nf-body { padding: 14px 18px; }
+.beat-main .say .avatar { width: 44px; height: 44px; }
+.beat-main .say .bubble { font-size: calc(var(--plot-font, 17px) + 1px); }
+.beat-main .narr { font-size: calc(var(--plot-font, 17px) + 1px); }

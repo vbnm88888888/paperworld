@@ -25,9 +25,7 @@
         /* 九段式界面 */
         _collapsed: {},     // 分区折叠：key = msgId:partKey
         _partEdit: null,    // {msg, part, text} 正在编辑的分区
-        isWide: false,      // 横屏/桌面模式：驱动「舞台+日志」双模板
-        logOpen: true,      // 右侧剧情日志展开/折叠
-        logDrawer: false,   // 竖屏：剧情日志抽屉开关
+        logDrawer: false,   // 剧情日志抽屉开关
         streamIntelOpen: false, // 流式：情报面板展开/折叠（默认收起）
 
         /* 书架/向导 */
@@ -149,33 +147,11 @@
         const keys = ['map', 'cast', 'schedule', 'explore', 'aside', 'mind'];
         return (this.streamNfParts || []).filter(p => keys.indexOf(p.key) >= 0);
       },
-      /* 顶部吸顶状态栏：从最新AI消息分区提取 时间/场景/天数/在场好感度 */
+      /* 顶部吸顶状态栏：时间/场景/天数 */
       statusBar() {
         if (!this.story) return null;
         const st = this.story.sessionState || {};
-        const out = { time: st.time || '', scene: st.scene || '', day: st.day || null, cast: [] };
-        const msgs = this.story.chat.messages;
-        let lastAi = null;
-        for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i].kind === 'ai') { lastAi = msgs[i]; break; } }
-        if (lastAi) {
-          const castPart = (this.nfParts(lastAi) || []).find(p => p.key === 'cast');
-          if (castPart) {
-            castPart.md.split('\n').forEach(l => {
-              const m = l.match(/🔹\s*([^：:|\s]{1,12})[：:]\s*好感度\s*(-?\d+)\s*%/);
-              if (m) {
-                const nm = m[1].trim();
-                const n = this.npcByName(nm);
-                out.cast.push({ name: nm, aff: Math.max(-100, Math.min(100, parseInt(m[2], 10) || 0)), src: n ? this.npcAvSrc(n.name) : '', emoji: n ? this.npcAvEmoji(n.name) : '' });
-              }
-            });
-          }
-        }
-        if (!out.cast.length) {
-          (this.story.npcs || []).filter(n => n.present !== false).forEach(n => {
-            out.cast.push({ name: n.name, aff: n.affinity == null ? 50 : n.affinity, src: this.npcAvSrc(n.name), emoji: this.npcAvEmoji(n.name) });
-          });
-        }
-        return out;
+        return { time: st.time || '', scene: st.scene || '', day: st.day || null };
       },
       /* 右侧剧情日志：每条AI节拍 = 时间/场景/首行正文摘要 */
       logEntries() {
@@ -244,18 +220,6 @@
     mounted() {
       PW.App = this;
       if (!this.settings.guideSeen) { this.guide.open = true; }
-      /* 横屏/舞台模式（与 CSS @media min-width:700px 同步）：手机横屏也进入三栏舞台 */
-      try {
-        this._mqWide = window.matchMedia('(min-width: 700px)');
-        this.isWide = this._mqWide.matches;
-        /* 手机窄横屏(700~899)默认收起右侧日志，桌面/平板宽横屏(≥900)默认展开 */
-        this.logOpen = this.isWide && window.innerWidth >= 900;
-        this._mqWide.addEventListener('change', e => {
-          this.isWide = e.matches;
-          if (!e.matches) { this.logOpen = true; this.logDrawer = false; }
-          if (e.matches) { this.logDrawer = false; }
-        });
-      } catch (e) { /* 老浏览器忽略 */ }
     },
 
     methods: {

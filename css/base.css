@@ -49,7 +49,6 @@ html.has-bg .fmt-aside,
 html.has-bg .beat,
 html.has-bg .nf-card,
 html.has-bg .intel-panel,
-html.has-bg .log-panel,
 html.has-bg .log-item {
   background: color-mix(in srgb, var(--card) 78%, transparent);
   backdrop-filter: blur(8px);

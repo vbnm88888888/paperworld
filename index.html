@@ -82,13 +82,6 @@
                 <span class="sb-item" v-if="statusBar.day">📅 第{{ statusBar.day }}天</span>
                 <span class="sb-item sb-scene" v-if="statusBar.scene">📍 {{ statusBar.scene }}</span>
               </div>
-              <div class="sb-cast">
-                <span class="sb-npc" v-for="(c, ci) in statusBar.cast" :key="ci" :title="c.name">
-                  <span class="av"><img v-if="c.src" :src="c.src" alt=""><template v-else>{{ c.emoji }}</template></span>
-                  <i class="hbar"><i :style="affBarStyle(c.aff)"></i></i>
-                  <em>{{ c.aff }}</em>
-                </span>
-              </div>
             </div>
             <div class="plot-empty" v-if="!story.chat.messages.length && !busy">
               <div class="big">{{ story.cover.emoji }}</div>
@@ -745,31 +738,12 @@
         </div>
       </div>
 
-      <!-- 右侧剧情日志（横屏舞台模式） -->
-      <aside class="log-panel" v-if="tab==='plot' && story.useNineFormat && isWide" :class="{collapsed: !logOpen}">
-        <div class="log-head" @click="logOpen=!logOpen">
-          <span class="log-ico">📜</span>
-          <b>剧情日志</b>
-          <span class="log-count">{{ logEntries.length }}</span>
-          <span class="log-chev" :class="{off: !logOpen}">▸</span>
-        </div>
-        <div class="log-list" v-show="logOpen" ref="logList">
-          <button class="log-item" v-for="(e, ei) in logEntries" :key="e.id" @click="jumpToBeat(e.id)">
-            <span class="log-time" v-if="e.time">{{ e.time }}</span>
-            <span class="log-scene" v-if="e.scene">{{ e.scene }}</span>
-            <span class="log-text">{{ e.first }}</span>
-          </button>
-          <div class="log-empty" v-if="!logEntries.length">暂无剧情节拍</div>
-        </div>
-      </aside>
-      </div>
-
-      <!-- 竖屏：剧情日志浮动按钮 + 底部抽屉 -->
-      <button class="log-fab" v-if="tab==='plot' && story.useNineFormat && !isWide" @click="openLogDrawer()" title="剧情日志">
+      <!-- 剧情日志：右下角浮动按钮 + 底部抽屉 -->
+      <button class="log-fab" v-if="tab==='plot' && story.useNineFormat" @click="openLogDrawer()" title="剧情日志">
         <span class="log-ico">📜</span><i v-if="logEntries.length">{{ logEntries.length }}</i>
       </button>
       <div class="log-mask" v-if="logDrawer" @click="logDrawer=false"></div>
-      <div class="log-drawer" :class="{open: logDrawer}" v-if="tab==='plot' && story.useNineFormat && !isWide">
+      <div class="log-drawer" :class="{open: logDrawer}" v-if="tab==='plot' && story.useNineFormat">
         <div class="log-drawer-head">
           <span class="log-ico">📜</span><b>剧情日志</b><span class="log-count">{{ logEntries.length }}</span>
           <button class="close-x" @click="logDrawer=false">✕</button>
