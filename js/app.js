@@ -22,6 +22,10 @@
         worldBusy: false,
         lastCtxEst: 0,
 
+        /* 九段式界面 */
+        _collapsed: {},     // 分区折叠：key = msgId:partKey
+        _partEdit: null,    // {msg, part, text} 正在编辑的分区
+
         /* 书架/向导 */
         showSettings: false,
         keyVisible: false,
@@ -127,6 +131,39 @@
           return [{ type: 'doc', html: this.mdDoc(stripped) }];
         }
         return [{ type: 'main', blocks: this.parseAiBlocks(stripped) }];
+      },
+      /* 九段式：流式输出实时解析成分区卡片 */
+      streamNfParts() {
+        if (!(this.story && this.story.useNineFormat)) return [];
+        return this.parseParts(this.streamText || '');
+      },
+      /* 顶部吸顶状态栏：从最新AI消息分区提取 时间/场景/天数/在场好感度 */
+      statusBar() {
+        if (!this.story) return null;
+        const st = this.story.sessionState || {};
+        const out = { time: st.time || '', scene: st.scene || '', day: st.day || null, cast: [] };
+        const msgs = this.story.chat.messages;
+        let lastAi = null;
+        for (let i = msgs.length - 1; i >= 0; i--) { if (msgs[i].kind === 'ai') { lastAi = msgs[i]; break; } }
+        if (lastAi) {
+          const castPart = (this.nfParts(lastAi) || []).find(p => p.key === 'cast');
+          if (castPart) {
+            castPart.md.split('\n').forEach(l => {
+              const m = l.match(/🔹\s*([^：:|\s]{1,12})[：:]\s*好感度\s*(-?\d+)\s*%/);
+              if (m) {
+                const nm = m[1].trim();
+                const n = this.npcByName(nm);
+                out.cast.push({ name: nm, aff: Math.max(-100, Math.min(100, parseInt(m[2], 10) || 0)), src: n ? this.npcAvSrc(n.name) : '', emoji: n ? this.npcAvEmoji(n.name) : '' });
+              }
+            });
+          }
+        }
+        if (!out.cast.length) {
+          (this.story.npcs || []).filter(n => n.present !== false).forEach(n => {
+            out.cast.push({ name: n.name, aff: n.affinity == null ? 50 : n.affinity, src: this.npcAvSrc(n.name), emoji: this.npcAvEmoji(n.name) });
+          });
+        }
+        return out;
       },
       memRecent() { return this.mem.records.slice(-40).reverse(); },
       clock() {
@@ -341,6 +378,9 @@
         if (!st.nineFmt) st.nineFmt = {};
         if (st.useNineFormat == null) st.useNineFormat = false;
         if (st.settings.fandom == null) st.settings.fandom = (st.genreKey === 'entertainment');
+        /* 九段式：补齐布局与状态机（旧故事无 layout 时用默认） */
+        this.ensureLayout();
+        if (!st.sessionState) st.sessionState = {};
         st.updatedAt = Date.now();
         this.tab = 'plot'; this.view = 'story';
         this.phoneView = 'home'; this.wxTab = 'chat'; this.wbTab = 'feed';
@@ -765,50 +805,92 @@
       aiBlocks(m) {
         if (!this._aiCache.has(m.id)) {
           if (this.story && this.story.useNineFormat) {
-            this._aiCache.set(m.id, [{ type: 'doc', html: this.mdDoc(this.stripLive(m.text)) }]);
+            this._aiCache.set(m.id, [{ type: 'nf', parts: this.nfParts(m) }]);
           } else {
             this._aiCache.set(m.id, [{ type: 'main', blocks: this.parseAiBlocks(m.text) }]);
           }
         }
         return this._aiCache.get(m.id);
       },
-      /* 整块Markdown文档渲染（自定义输出格式模式） */
+      /* ---------- Markdown 渲染（九段式分区用，增强版：列表/表格/代码块/复选框/引用/标题） ---------- */
+      mdInline(s) {
+        let t = String(s == null ? '' : s);
+        t = t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+        t = t.replace(/\*\*\*([^*]+)\*\*\*/g, '<b><i>$1</i></b>');
+        t = t.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+        t = t.replace(/\*([^*\n]+)\*/g, '<i>$1</i>');
+        t = t.replace(/~~([^~]+)~~/g, '<s>$1</s>');
+        return t;
+      },
       mdDoc(text) {
-        const inline = (s) => {
-          let t = String(s == null ? '' : s);
-          t = t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          t = t.replace(/\*\*\*([^*]+)\*\*\*/g, '<b><i>$1</i></b>');
-          t = t.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-          t = t.replace(/\*([^*\n]+)\*/g, '<i>$1</i>');
-          t = t.replace(/~~([^~]+)~~/g, '<s>$1</s>');
-          t = t.replace(/\*/g, '');
-          return t;
-        };
         const lines = String(text || '').split('\n');
-        let html = '', para = [], quote = [];
-        const flush = () => {
-          if (quote.length) {
-            html += '<div class="md-quote">' + quote.map(l => '<div class="md-quote-line">' + inline(l) + '</div>').join('') + '</div>';
-            quote = [];
-          }
-          if (para.length) {
-            html += '<div class="md-p">' + para.map(p => '<div class="md-line ' + p.cls + '">' + inline(p.text) + '</div>').join('') + '</div>';
-            para = [];
-          }
-        };
-        for (const raw of lines) {
+        let html = '', i = 0;
+        const inline = s => this.mdInline(s);
+        const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const closeList = () => { while (_lists.length) { const l = _lists.pop(); html += (l.o ? '<ol class="md-ol">' : '<ul class="md-ul">') + l.items.join('') + (l.o ? '</ol>' : '</ul>'); } };
+        const _lists = [];
+        while (i < lines.length) {
+          const raw = lines[i];
           const l = raw.trim();
-          if (!l) { flush(); continue; }
-          if (/^[-—_=∙•\s]{4,}$/.test(l)) { flush(); html += '<hr>'; continue; }
-          if (l.startsWith('>')) { if (para.length) flush(); quote.push(l.replace(/^>\s?/, '')); continue; }
-          if (/^#{1,6}\s/.test(l)) { flush(); html += '<div class="md-h">' + inline(l.replace(/^#+\s*/, '')) + '</div>'; continue; }
+          if (!l) { closeList(); i++; continue; }
+          /* 代码块 */
+          if (/^```/.test(l)) {
+            closeList();
+            const buf = [];
+            i++;
+            while (i < lines.length && !/^```/.test(lines[i].trim())) { buf.push(esc(lines[i])); i++; }
+            i++;
+            html += '<pre class="md-code"><code>' + buf.join('\n') + '</code></pre>';
+            continue;
+          }
+          /* 表格 */
+          if (/^\|.*\|$/.test(l) && i + 1 < lines.length && /^\|[\s:|-]+\|$/.test(lines[i + 1].trim())) {
+            closeList();
+            const head = l.split('|').slice(1, -1).map(s => '<th>' + inline(s.trim()) + '</th>').join('');
+            i += 2;
+            const rows = [];
+            while (i < lines.length && /^\|.*\|$/.test(lines[i].trim())) { rows.push('<tr>' + lines[i].split('|').slice(1, -1).map(s => '<td>' + inline(s.trim()) + '</td>').join('') + '</tr>'); i++; }
+            html += '<table class="md-table"><thead><tr>' + head + '</tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+            continue;
+          }
+          if (/^#{1,6}\s/.test(l)) { closeList(); html += '<div class="md-h">' + inline(l.replace(/^#+\s*/, '')) + '</div>'; i++; continue; }
+          if (/^[-—_=∙•\s]{4,}$/.test(l)) { closeList(); html += '<hr>'; i++; continue; }
+          if (l.startsWith('>')) {
+            closeList();
+            const q = [];
+            while (i < lines.length && lines[i].trim().startsWith('>')) { q.push(lines[i].trim().replace(/^>\s?/, '')); i++; }
+            html += '<div class="md-quote">' + q.map(x => '<div class="md-quote-line">' + inline(x) + '</div>').join('') + '</div>';
+            continue;
+          }
+          /* 列表（单层：无序/有序/复选框） */
+          if (/^(\s*)([-*+]|\d+[.、．])\s+/.test(raw)) {
+            closeList();
+            const ordered = /^\s*\d/.test(raw);
+            const items = [];
+            while (i < lines.length) {
+              const m = lines[i].match(/^(\s*)([-*+]|\d+[.、．])\s+(.*)$/);
+              if (!m || m[1].length > 8) break;
+              const cb = m[3].match(/^\[([ xX])\]\s+(.*)$/);
+              const cls = cb ? (cb[1] === 'x' || cb[1] === 'X' ? 'md-check' : 'md-todo') : '';
+              const icon = cb ? (cb[1] === 'x' || cb[1] === 'X' ? '☑ ' : '☐ ') : '';
+              const cls2 = /🔹/.test(m[3]) ? 'md-aff-line' : cls;
+              items.push('<li class="' + cls2 + '">' + icon + inline(cb ? cb[2] : m[3]) + '</li>');
+              i++;
+            }
+            html += (ordered ? '<ol class="md-ol">' : '<ul class="md-ul">') + items.join('') + (ordered ? '</ol>' : '</ul>');
+            continue;
+          }
+          /* 普通段落 */
+          closeList();
           const cls = /✅|☑|^\[\s*x?\s*\]/i.test(l) ? 'md-check' : (/🔹/.test(l) ? 'md-aff-line' : '');
-          para.push({ text: l, cls });
+          html += '<div class="md-p"><div class="md-line ' + cls + '">' + inline(l) + '</div></div>';
+          i++;
         }
-        flush();
+        closeList();
         return html;
       },
-      /* 整段文本中的好感度行同步（自定义格式模式） */
+      /* 整段文本中的好感度行同步（九段式/自定义格式通用） */
       syncAffFromText(text) {
         const re = /🔹\s*([^：:\s|]{1,12})[：:]\s*好感度\s*(-?\d+)\s*%?/g;
         let m;
@@ -820,10 +902,152 @@
           }
         }
       },
-      /* ---- 结构化格式解析（9条格式 → 卡片；无标记时整体作为正文） ---- */
+
+      /* ==================== 九段式剧情界面 ==================== */
+      partDef(key) {
+        return PW.NINE_SECTIONS.find(s => s.key === key) || { key, title: key, icon: '📄' };
+      },
+      secDef(sec) { return PW.NINE_SECTIONS.find(s => s.key === sec.key) || {}; },
+      isPartEditing(m, p) { return !!(this._partEdit && this._partEdit.msg === m && this._partEdit.part === p); },
+      partKeyOfTitle(title) {
+        const T = String(title || '');
+        if (/地图/.test(T)) return 'map';
+        if (/时间/.test(T)) return 'time';
+        if (/场景/.test(T)) return 'scene';
+        if (/在场|人员动向|出场/.test(T)) return 'cast';
+        if (/日程/.test(T)) return 'schedule';
+        if (/探索|区域记录|情报更新/.test(T)) return 'explore';
+        if (/旁白|回溯|自检/.test(T)) return 'aside';
+        if (/心理/.test(T)) return 'mind';
+        if (/正文/.test(T)) return 'story';
+        return null;
+      },
+      /* AI原文 → 9个分区数组 [{key,title,icon,md,locked}] */
+      parseParts(text) {
+        const clean = String(text || '')
+          .replace(/\[\[[^\]]*\]\]/g, '')   // 隐藏标记
+          .replace(/\r/g, '')
+          .replace(/\n{3,}/g, '\n\n');
+        const out = [];
+        let cur = null, pre = '';
+        const flush = () => {
+          if (cur) {
+            const md = (pre + cur.md).replace(/^\s+|\s+$/g, '');
+            pre = '';
+            if (md) out.push({ key: cur.key, title: cur.title, icon: cur.icon, md, locked: false });
+          }
+        };
+        for (const raw of clean.split('\n')) {
+          const h = raw.trim().match(/^(?:\d+\s*[.、．]\s*)?【([^】]+)】\s*$/);
+          if (h) {
+            flush();
+            const title = h[1].trim();
+            const key = this.partKeyOfTitle(title);
+            cur = key ? { key, title, icon: this.partDef(key).icon, md: '' } : null;
+            continue;
+          }
+          if (cur) cur.md += raw + '\n';
+          else pre += raw + '\n';
+        }
+        flush();
+        if (!out.length) out.push({ key: 'story', title: '正文内容', icon: this.partDef('story').icon, md: clean.trim() || '…', locked: false });
+        return out;
+      },
+      nfParts(m) {
+        if (!m.parts) m.parts = this.parseParts(m.raw || m.text || '');
+        return m.parts;
+      },
+      /* 正文分区 → 头像气泡渲染（复用 parseAiBlocks） */
+      storyBlocks(md) {
+        const clean = String(md || '').split('\n')
+          .filter(x => !/^\s*>\s*\**\s*正文\s*\**\s*$/.test(x))  // 去掉 "> **正文**" 包裹
+          .join('\n');
+        return this.parseAiBlocks(clean);
+      },
+      /* 从最新一条AI消息回写游戏状态机（时间/场景/天/探索/日程） */
+      updateSessionState(msg) {
+        const story = this.story;
+        if (!story || !msg) return;
+        if (!story.sessionState) story.sessionState = {};
+        const st = story.sessionState;
+        const byKey = k => (msg.parts || []).find(p => p.key === k);
+        const tp = byKey('time');
+        if (tp) { const m = tp.md.match(/\[\s*(\d{1,2}月\d{1,2}日[^\]]*?)\s*\]/); if (m) st.time = m[1].trim(); }
+        const sp = byKey('scene');
+        if (sp) { const m = sp.md.match(/\[\s*([^\]]+?)\s*\]/); if (m) st.scene = m[1].trim(); }
+        const sch = byKey('schedule');
+        if (sch) {
+          const d = sch.md.match(/第\s*(\d+)\s*天/);
+          if (d) st.day = parseInt(d[1], 10);
+          st.schedule = sch.md.replace(/\s+/g, ' ').slice(0, 200);
+        }
+        const ep = byKey('explore');
+        if (ep) {
+          if (!st.explored) st.explored = [];
+          ep.md.split('\n').forEach(l => {
+            const m = l.match(/✅\s*[`*]*([^`*\s][^`*\n]*)/);
+            if (m) { const a = m[1].trim(); if (a && st.explored.indexOf(a) < 0) st.explored.push(a); }
+          });
+        }
+      },
+      /* 分区编辑 */
+      togglePart(m, p) { const k = m.id + ':' + p.key; this._collapsed[k] = !this._collapsed[k]; },
+      isPartCollapsed(m, p) { return !!this._collapsed[m.id + ':' + p.key]; },
+      editPart(m, p) { this._partEdit = { msg: m, part: p, text: p.md }; },
+      savePart() {
+        const e = this._partEdit;
+        if (e && e.part) {
+          e.part.md = e.text;
+          e.part.locked = true;  // 编辑过 → 锁定，后续作为固定设定喂给AI
+          if (e.msg) this.updateSessionState(e.msg);
+          this.toast('分区已保存并锁定（后续生成会沿用）', '🔒');
+        }
+        this._partEdit = null;
+      },
+      cancelPart() { this._partEdit = null; },
+      delPart(m, p) {
+        const arr = m.parts;
+        const i = arr.indexOf(p);
+        if (i >= 0) arr.splice(i, 1);
+        this.toast('分区已删除', '🗑');
+      },
+      addPart(m) {
+        const used = (m.parts || []).map(p => p.key);
+        const avail = PW.NINE_SECTIONS.filter(s => used.indexOf(s.key) < 0);
+        if (!avail.length) { this.toast('已包含全部分区', 'ℹ️'); return; }
+        const def = avail[0];
+        m.parts.push({ key: def.key, title: def.title, icon: def.icon, md: '', locked: false });
+        this._partEdit = { msg: m, part: m.parts[m.parts.length - 1], text: '' };
+        this.toast('已添加分区「' + def.title + '」，请编辑内容', '➕');
+      },
+      /* 只重写某个分区 */
+      async rerollPart(m, p) {
+        if (this.busy) return;
+        this.busy = true;
+        try {
+          const others = (m.parts || []).filter(x => x.key !== p.key)
+            .map(x => '【' + x.title + '】\n' + (x.md || '')).join('\n\n');
+          const sys = '你是互动小说《' + this.story.title + '》的GM。现在只重写上一个剧情节拍中的【' + p.title + '】分区：只输出该分区内容，不要输出其他分区的段名，不要重复其他分区内容；格式与写作规则和该分区原本的要求一致。';
+          const user = '该节拍其他分区（仅供保持一致性，不要重复）：\n' + (others || '（无）') + '\n\n请重写【' + p.title + '】分区。';
+          const { content } = await PW.Api.chat({ messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], stream: false });
+          if (content) {
+            p.md = String(content).trim();
+            p.locked = false;
+            if (m) this.updateSessionState(m);
+            this.toast('已重写「' + p.title + '」', '↻');
+          }
+        } catch (e) { this.showError(e); }
+        finally { this.busy = false; }
+      },
+      /* 布局：确保 story.layout 存在 */
+      ensureLayout() {
+        if (this.story && !(Array.isArray(this.story.layout) && this.story.layout.length)) {
+          this.story.layout = JSON.parse(JSON.stringify(PW.DEFAULT_LAYOUT));
+        }
+      },
       insertNineTemplate() {
-        this.story.outputFormat = PW.NINE_TEMPLATE;
-        this.toast('已插入九段式模板，可自由改写', '📋');
+        this.story.layout = JSON.parse(JSON.stringify(PW.DEFAULT_LAYOUT));
+        this.toast('已恢复九段式默认布局，可逐分区编辑', '📋');
       },
       scrollBottom(force) {
         if (this.tab !== 'plot' && !force) return;
@@ -937,6 +1161,11 @@
           this.toast('⚠️ 本条生成质量异常（标点密度过低），建议长按重掷', '⚠️');
         }
         story.chat.messages.push(msg);
+        /* 九段式：解析分区并回写游戏状态机 */
+        if (story.useNineFormat) {
+          msg.parts = this.parseParts(sc.text);
+          this.updateSessionState(msg);
+        }
         this._aiCache.set(msg.id, this.aiBlocks(msg));
         /* 同步好感度（卡片模式/自定义格式模式通用） */
         this.syncAffFromText(raw);
@@ -1090,7 +1319,13 @@
           this.story.title = this.msgEdit.text.trim() || this.story.title;
         } else if (this.msgEdit.msg) {
           this.msgEdit.msg.text = this.msgEdit.text;
-          if (this.msgEdit.msg.kind === 'ai') { this.msgEdit.msg.raw = this.msgEdit.text; this._aiCache.delete(this.msgEdit.msg.id); this._aiCache.set(this.msgEdit.msg.id, this.parseAiBlocks(this.msgEdit.text)); }
+          if (this.msgEdit.msg.kind === 'ai') {
+            this.msgEdit.msg.raw = this.msgEdit.text;
+            this.msgEdit.msg.parts = this.story && this.story.useNineFormat ? this.parseParts(this.msgEdit.text) : null;
+            if (this.msgEdit.msg.parts) this.updateSessionState(this.msgEdit.msg);
+            this._aiCache.delete(this.msgEdit.msg.id);
+            this._aiCache.set(this.msgEdit.msg.id, this.aiBlocks(this.msgEdit.msg));
+          }
         }
         this.msgEdit.open = false;
         this.toast('已保存', '✔');

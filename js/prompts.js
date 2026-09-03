@@ -10,6 +10,51 @@ window.PW = window.PW || {};
   const NL = String.fromCharCode(10);
   const fmtDate = ts => new Date(ts).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
 
+  /* 九段式 layout 兜底（旧故事无 layout 时用默认） */
+  function layoutOf(story) {
+    return (story && Array.isArray(story.layout) && story.layout.length) ? story.layout : PW.DEFAULT_LAYOUT;
+  }
+
+  /* ---------- 九段式输出格式块（格式代码固定 + 内容提示词可编辑 + 游戏状态注入） ---------- */
+  function nineBlock(story) {
+    const layout = layoutOf(story);
+    const st = story.sessionState || {};
+    const lines = [];
+    /* 游戏状态机：时间/场景/日程连续性 */
+    if (st.time || st.scene || st.day || (st.explored && st.explored.length) || (st.schedule && st.schedule.trim())) {
+      lines.push('【当前游戏状态（必须保持连续，严禁凭空重置或跳变；时间推进见"时间"分区规则）】');
+      if (st.time) lines.push('· 当前时间：' + st.time);
+      if (st.scene) lines.push('· 当前场景：' + st.scene);
+      if (st.day) lines.push('· 剧情第 ' + st.day + ' 天');
+      if (st.explored && st.explored.length) lines.push('· 已探索区域：' + st.explored.join('、'));
+      if (st.schedule && st.schedule.trim()) lines.push('· 上一日日程：' + st.schedule.replace(/\s+/g, ' ').slice(0, 120));
+    }
+    let n = 0;
+    layout.forEach(sec => {
+      if (sec.enabled === false) return;
+      n++;
+      const F = PW.NINE_SECTIONS.find(s => s.key === sec.key);
+      const title = sec.title || (F ? F.title : sec.key);
+      const icon = sec.icon || (F ? F.icon : '📄');
+      const chunk = [n + '.【' + title + '】'];
+      if (F && F.fmt) chunk.push(F.fmt);          // 格式规则：代码固定
+      const cp = (sec.contentPrompt || '').trim(); // 内容提示词：界面可编辑
+      if (cp) chunk.push(cp);
+      lines.push(chunk.join(NL));
+    });
+    return '【九段式输出格式（绝对命令，严格按此格式逐段生成，各部分缺一不可；每段以"N.【段名】"开头）】'
+      + NL + lines.join(NL + NL);
+  }
+
+  /* 九段式附加协议（与 useNineFormat 绑定） */
+  function nineProtocol() {
+    return '【九段式附加协议（最高优先级）】' + NL
+      + '1. 用中文。' + NL
+      + '2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情推进到需要玩家抉择时必须停下等待玩家输入。' + NL
+      + '3. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10；变化要在【在场人员动向】的好感度进度里体现。' + NL
+      + '4. 时间/场景/日程必须基于【当前游戏状态】连续推进，不得重置或跳变。';
+  }
+
   /* ---------- L0：系统主提示词 ---------- */
   function gmSystem(story, layers) {
     const tpl = PW.TEMPLATES[story.genreKey];
@@ -26,13 +71,7 @@ window.PW = window.PW || {};
         + '2. 绝不代替玩家角色做决定，绝不描写玩家角色未声明的行动与心理；其他角色只对玩家已声明的行为做出反应。\n'
         + '3. 若有角色好感或状态变化，可在回复末尾另起一行输出隐藏标记（系统自动剔除，玩家不可见，不要在正文解释）：[[AFF:NPC名:+3]] 或 [[AFF:NPC名:-2]]、[[STATE:NPC名:状态短语]]。\n';
       if (story.useNineFormat) {
-        const userFmt = (story.outputFormat || '').trim();
-        if (userFmt) {
-          sys += NL + NL + '【自定义输出格式（绝对命令，严格按此格式生成，各部分缺一不可）】' + NL + userFmt;
-        }
-        sys += NL + NL + '【系统附加协议（最高优先级）】' + NL
-          + '1. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。' + NL
-          + '2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情到抉择点必须停下等待玩家输入。';
+        sys += NL + NL + nineBlock(story) + NL + NL + nineProtocol();
         return sys;
       }
       sys += '5. 好感度与状态变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情，不可无脑上升；单次变化幅度不超过±10。\n';
@@ -88,14 +127,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 
     /* 输出格式协议 */
     if (story.useNineFormat) {
-      const userFmt = (story.outputFormat || '').trim();
-      if (userFmt) {
-        sys += NL + NL + '【自定义输出格式（绝对命令，严格按此格式生成，各部分缺一不可）】' + NL + userFmt;
-      }
-      sys += NL + NL + '【系统附加协议（最高优先级）】' + NL
-        + '1. 用中文。' + NL
-        + '2. 严禁代替玩家角色做任何决定，严禁描写玩家角色的心理、未声明的动作与台词；剧情推进到需要玩家抉择时必须停下等待玩家输入。' + NL
-        + '3. 好感度变化必须符合逻辑：贴合NPC性格与剧情因果，不可无脑上升，单次不超过±10。';
+      sys += NL + NL + nineBlock(story) + NL + NL + nineProtocol();
     } else {
     sys += `
 
@@ -364,6 +396,7 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 
   window.PW.Prompts = {
     gmSystem, historyMessages, recentPlot, build, summaryPrompt, rosterBlock,
+    nineBlock, nineProtocol, layoutOf,
     worldviewPrompt, polishPrompt, npcGenPrompt,
     proactiveChatPrompt, phoneChatMessages, momentsPrompt, weiboPrompt, momentReplyPrompt, weiboReplyPrompt,
     hotDetailPrompt, supertopicPrompt, groupChatPrompt, momentsPlayerPostPrompt, weiboPlayerPostPrompt, momentReplyToReplyPrompt

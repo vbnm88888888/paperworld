@@ -14,7 +14,28 @@ window.PW = window.PW || {};
     if (status === 422) return '请求参数错误（多为主键/上下文超限），可尝试清空部分剧情或减小记忆层数';
     if (status === 429) return '请求过于频繁（限流），稍等几秒再试';
     if (status >= 500) return 'DeepSeek 服务器开小差了，请稍后重试';
+    if (bodyText && /unexpected end of hex escape|Failed to parse the request body/i.test(bodyText))
+      return '请求内容含异常字符（孤立代理项），已自动清洗，请重试';
     return '请求失败（HTTP ' + status + '）' + (bodyText ? '：' + bodyText.slice(0, 120) : '');
+  }
+
+  /* 清除字符串中的孤立代理项（高低代理对不完整，多为按码元截断 emoji 所致）。
+   * DeepSeek 网关(serde_json)会因这类字节返回 400: unexpected end of hex escape。 */
+  function scrubSurrogates(s) {
+    if (typeof s !== 'string') return s;
+    return s
+      .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/g, '\uFFFD')   // 孤立高代理
+      .replace(/(^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '$1\uFFFD'); // 孤立低代理
+  }
+  function scrubPayload(obj) {
+    if (typeof obj === 'string') return scrubSurrogates(obj);
+    if (Array.isArray(obj)) return obj.map(scrubPayload);
+    if (obj && typeof obj === 'object') {
+      const out = {};
+      for (const k in obj) out[k] = scrubPayload(obj[k]);
+      return out;
+    }
+    return obj;
   }
 
   /**
@@ -35,13 +56,16 @@ window.PW = window.PW || {};
     };
     if (body.stream) body.stream_options = { include_usage: true };
 
+    /* 发送前清洗孤立代理项，避免 DeepSeek 网关 400 */
+    const safeBody = scrubPayload(body);
+
     let res, lastErr = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         res = await fetch(endpoint(s.apiBase), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + s.apiKey },
-          body: JSON.stringify(body),
+          body: JSON.stringify(safeBody),
           signal: opt.signal
         });
         if (res.ok) { lastErr = null; break; }

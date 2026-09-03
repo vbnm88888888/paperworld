@@ -75,6 +75,20 @@
         <!-- ===== 剧情 Tab ===== -->
         <div v-if="tab==='plot'">
           <div class="msg-list">
+            <div class="statusbar" v-if="story.useNineFormat && statusBar">
+              <div class="sb-left">
+                <span class="sb-item" v-if="statusBar.time">🕐 {{ statusBar.time }}</span>
+                <span class="sb-item" v-if="statusBar.day">📅 第{{ statusBar.day }}天</span>
+                <span class="sb-item sb-scene" v-if="statusBar.scene">📍 {{ statusBar.scene }}</span>
+              </div>
+              <div class="sb-cast">
+                <span class="sb-npc" v-for="(c, ci) in statusBar.cast" :key="ci" :title="c.name">
+                  <span class="av"><img v-if="c.src" :src="c.src" alt=""><template v-else>{{ c.emoji }}</template></span>
+                  <i class="hbar"><i :style="affBarStyle(c.aff)"></i></i>
+                  <em>{{ c.aff }}</em>
+                </span>
+              </div>
+            </div>
             <div class="plot-empty" v-if="!story.chat.messages.length && !busy">
               <div class="big">{{ story.cover.emoji }}</div>
               <h2>{{ story.title }}</h2>
@@ -89,24 +103,70 @@
               <template v-if="m.kind==='me'">
                 <div class="msg me"><div class="bubble">{{ m.text }}</div></div>
               </template>
-              <!-- GM 回复：自定义格式=整块Markdown文档；普通模式=旁白+对话气泡 -->
+              <!-- GM 回复：九段式=分区卡片；普通模式=旁白+对话气泡 -->
               <template v-else-if="m.kind==='ai'">
-                <template v-for="(sec, si) in aiBlocks(m)" :key="si">
-                  <div v-if="sec.type==='doc'" class="md-doc" v-html="sec.html"></div>
-                  <template v-else>
-                    <template v-for="(b, bi) in sec.blocks" :key="bi">
-                      <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
-                      <div v-else-if="b.type==='say'" class="say">
-                        <div class="avatar">
-                          <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
-                          <template v-else>{{ npcAvEmoji(b.name) }}</template>
-                        </div>
-                        <div class="body">
-                          <div class="name">{{ b.name }}</div>
-                          <div class="bubble" v-html="md(b.text)"></div>
-                        </div>
+                <template v-if="story.useNineFormat">
+                  <div class="beat">
+                    <div class="nf-card" v-for="(p, pi) in nfParts(m)" :key="m.id+':'+pi" :class="'nf-'+p.key">
+                      <div class="nf-head" @click="togglePart(m,p)">
+                        <span class="nf-ico">{{ p.icon }}</span>
+                        <span class="nf-title">{{ p.title }}</span>
+                        <span class="nf-lock" v-if="p.locked" title="已锁定：后续生成会沿用">🔒</span>
+                        <span class="nf-chev" :class="{off: isPartCollapsed(m,p)}">▾</span>
+                        <span class="nf-ops" @click.stop>
+                          <button v-if="!isPartEditing(m,p)" @click="editPart(m,p)" title="编辑本分区">✎</button>
+                          <button v-if="!isPartEditing(m,p) && p.key==='story'" @click="rerollPart(m,p)" title="只重写本分区">↻</button>
+                          <button v-if="!isPartEditing(m,p)" @click="delPart(m,p)" title="删除本分区">✕</button>
+                        </span>
                       </div>
-                      <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                      <div class="nf-body" v-if="!isPartCollapsed(m,p)">
+                        <template v-if="isPartEditing(m,p)">
+                          <textarea class="inp nf-edit" v-model="_partEdit.text" rows="8" placeholder="编辑本分区内容（Markdown）…"></textarea>
+                          <div class="nf-edit-ops">
+                            <button class="btn sm primary" @click="savePart">✔ 保存并锁定</button>
+                            <button class="btn sm" @click="cancelPart">取消</button>
+                          </div>
+                        </template>
+                        <template v-else-if="p.key==='story'">
+                          <template v-for="(b, bi) in storyBlocks(p.md)" :key="bi">
+                            <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
+                            <div v-else-if="b.type==='say'" class="say">
+                              <div class="avatar">
+                                <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                                <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                              </div>
+                              <div class="body">
+                                <div class="name">{{ b.name }}</div>
+                                <div class="bubble" v-html="md(b.text)"></div>
+                              </div>
+                            </div>
+                            <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                          </template>
+                        </template>
+                        <div v-else class="nf-md" v-html="mdDoc(p.md)"></div>
+                      </div>
+                    </div>
+                    <div class="nf-foot" @click="addPart(m)">＋ 添加分区</div>
+                  </div>
+                </template>
+                <template v-else>
+                  <template v-for="(sec, si) in aiBlocks(m)" :key="si">
+                    <div v-if="sec.type==='doc'" class="md-doc" v-html="sec.html"></div>
+                    <template v-else>
+                      <template v-for="(b, bi) in sec.blocks" :key="bi">
+                        <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
+                        <div v-else-if="b.type==='say'" class="say">
+                          <div class="avatar">
+                            <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                            <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                          </div>
+                          <div class="body">
+                            <div class="name">{{ b.name }}</div>
+                            <div class="bubble" v-html="md(b.text)"></div>
+                          </div>
+                        </div>
+                        <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                      </template>
                     </template>
                   </template>
                 </template>
@@ -131,21 +191,54 @@
 
             <!-- 流式输出中 -->
             <div class="msg" v-if="busy">
-              <template v-for="(sec, si) in streamBlocks" :key="'s'+si">
-                <div v-if="sec.type==='doc'" class="md-doc" v-html="sec.html"></div>
-                <template v-else>
-                  <template v-for="(b, bi) in sec.blocks" :key="bi">
-                    <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span><span v-if="si===streamBlocks.length-1 && bi===sec.blocks.length-1" class="cursor-blink"></span></div>
-                    <div v-else-if="b.type==='say'" class="say">
-                      <div class="avatar">
-                        <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
-                        <template v-else>{{ npcAvEmoji(b.name) }}</template>
-                      </div>
-                      <div class="body"><div class="name">{{ b.name }}</div>
-                        <div class="bubble" v-html="md(b.text)"></div>
-                      </div>
+              <template v-if="story.useNineFormat">
+                <div class="beat">
+                  <div class="nf-card" v-for="(p, pi) in streamNfParts" :key="'s'+pi" :class="'nf-'+p.key">
+                    <div class="nf-head">
+                      <span class="nf-ico">{{ p.icon }}</span>
+                      <span class="nf-title">{{ p.title }}</span>
+                      <span class="nf-chev">▾</span>
                     </div>
-                    <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                    <div class="nf-body">
+                      <template v-if="p.key==='story'">
+                        <template v-for="(b, bi) in storyBlocks(p.md)" :key="bi">
+                          <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
+                          <div v-else-if="b.type==='say'" class="say">
+                            <div class="avatar">
+                              <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                              <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                            </div>
+                            <div class="body">
+                              <div class="name">{{ b.name }}</div>
+                              <div class="bubble" v-html="md(b.text)"></div>
+                            </div>
+                          </div>
+                          <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                        </template>
+                      </template>
+                      <div v-else class="nf-md" v-html="mdDoc(p.md)"></div>
+                      <span v-if="pi===streamNfParts.length-1" class="cursor-blink"></span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template v-else>
+                <template v-for="(sec, si) in streamBlocks" :key="'s'+si">
+                  <div v-if="sec.type==='doc'" class="md-doc" v-html="sec.html"></div>
+                  <template v-else>
+                    <template v-for="(b, bi) in sec.blocks" :key="bi">
+                      <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span><span v-if="si===streamBlocks.length-1 && bi===sec.blocks.length-1" class="cursor-blink"></span></div>
+                      <div v-else-if="b.type==='say'" class="say">
+                        <div class="avatar">
+                          <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                          <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                        </div>
+                        <div class="body"><div class="name">{{ b.name }}</div>
+                          <div class="bubble" v-html="md(b.text)"></div>
+                        </div>
+                      </div>
+                      <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                    </template>
                   </template>
                 </template>
               </template>
@@ -240,14 +333,21 @@
           <textarea class="inp world-text" v-model="story.worldview.text" placeholder="这个世界是什么样的？时代、地点、规则、暗流……"></textarea>
           <div class="tok-est">≈ {{ worldTokens }} tokens</div>
 
-          <!-- 自定义输出格式（自由编辑） -->
-          <div class="sec-title" v-if="story.useNineFormat">自定义输出格式 <span class="line"></span>
-            <button class="btn sm" @click="insertNineTemplate">📋 插入九段式模板</button>
+          <!-- 九段式分区设置（格式代码固定，内容提示词可编辑） -->
+          <div class="sec-title" v-if="story.useNineFormat">剧情分区 · 九段式 <span class="line"></span>
+            <button class="btn sm" @click="insertNineTemplate">↺ 恢复默认布局</button>
           </div>
-          <div v-if="story.useNineFormat" style="margin-bottom:14px">
-            <textarea class="inp nf-editor" style="min-height:280px" v-model="story.outputFormat" placeholder="自由编写输出格式提示词：规定AI每次回复生成哪些部分、每部分怎么写、什么格式……留空则不附加格式"></textarea>
-            <div style="font-size:11.5px;color:var(--ink3)">
-              开关开启后此提示词以最高优先级注入，随故事保存。支持Markdown（***粗斜体***、**粗体**、> 引用块），剧情区会自动排版渲染。
+          <div v-if="story.useNineFormat" class="nf-settings" style="margin-bottom:14px">
+            <div class="nf-sec" v-for="(sec, si) in story.layout" :key="sec.key">
+              <div class="nf-sec-head">
+                <div class="switch" :class="{on: sec.enabled!==false}" @click="sec.enabled = !(sec.enabled!==false)"></div>
+                <span class="nf-ico">{{ sec.icon }}</span>
+                <b>{{ sec.title }}</b>
+                <span class="hint">格式代码固定</span>
+                <button class="btn sm" @click="sec._edit=!sec._edit">{{ sec._edit ? '收起' : '✎ 内容提示词' }}</button>
+              </div>
+              <div class="nf-sec-fmt" v-if="secDef(sec).fmt">{{ secDef(sec).fmt }}</div>
+              <textarea v-if="sec._edit" class="inp nf-sec-prompt" v-model="sec.contentPrompt" placeholder="该分区的内容提示词（写什么 / 怎么写）……留空则只有格式规则"></textarea>
             </div>
           </div>
 

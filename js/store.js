@@ -64,6 +64,8 @@ window.PW = window.PW || {};
       phone: { chats: {}, moments: [], groups: [], follows: {}, weibo: { posts: [], hot: [], supertopics: [] } },
       useNineFormat: true,
       outputFormat: '',
+      layout: JSON.parse(JSON.stringify(PW.DEFAULT_LAYOUT)),
+      sessionState: { time: '', scene: '', day: 1, explored: [], schedule: '' },
       settings: {
         styleId: tpl ? tpl.styleId : 'delicate',
         pov: 'third',
