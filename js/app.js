@@ -56,8 +56,9 @@
 
         /* 书架/向导 */
         showSettings: false,
-        /* 合并显示（经典整块）：硬编码关闭=九段式分区界面为唯一显示方式 */
-        classicView: false,
+        /* 合并显示（整块）：硬编码开启=剧情界面永远渲染成一块完整文字流（旁白+头像气泡），
+           不使用九段式卡片分区界面 */
+        classicView: true,
         keyVisible: false,
         newModelId: '',
         wizard: { open: false, step: 0, genreKey: 'blank', title: '', idea: '', worldview: '', rules: [], npcs: [], player: { name: '', gender: '女', age: '', persona: '', avatar: null }, genBusy: false },
@@ -849,12 +850,12 @@
           if (this.story && this.story.useNineFormat && !this.classicView) {
             this._aiCache.set(m.id, [{ type: 'nf', parts: this.nfParts(m) }]);
           } else {
-            /* 合并显示（经典模式）：直接用完整原文渲染旁白+对话气泡；
-               去掉九段式段头行与隐藏标记，正文完整保留 */
+            /* 合并显示（整块）：直接用完整原文渲染成一块连续文字流（旁白+对话气泡）；
+               清理九段式段头标记与隐藏标记，正文完整保留，不出现任何分区卡片 */
             const classicText = String(m.raw || m.text || '')
               .replace(/\[\[AFF:[^\]]*\]\]/g, '')
               .replace(/\[\[STATE:[^\]]*\]\]/g, '')
-              .replace(/^\s*\d+\s*[.、]\s*【[^】]*】\s*$/gm, '')
+              .replace(/^\s*\d+\s*[.、]\s*【[^】]*】/gm, '')   // 去掉行首"N.【段名】"前缀（含同行情内容）
               .replace(/^\s*---+\s*$/gm, '');
             this._aiCache.set(m.id, [{ type: 'main', blocks: this.parseAiBlocks(classicText) }]);
           }
