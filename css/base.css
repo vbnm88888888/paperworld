@@ -1,32 +1,38 @@
 /* ============ 基础样式：变量 / 重置 / 通用组件 ============ */
 :root {
-  --bg: #f4f5f7;
+  --bg: #fdf7f6;
   --card: #ffffff;
-  --card2: #f8f9fb;
-  --ink: #1c2330;
-  --ink2: #6b7280;
-  --ink3: #a0a8b4;
-  --line: #e8eaee;
-  --acc: #4f8ef7;
-  --acc2: #38c6d9;
+  --card2: #fff3f1;
+  --ink: #42363a;
+  --ink2: #8a7278;
+  --ink3: #c3aab0;
+  --line: #f6e3e1;
+  --acc: #f27fa2;
+  --acc2: #a5d8c7;
   --danger: #e5484d;
-  --ok: #2ea86b;
-  --warn: #e8930c;
-  --bubble-npc: #ffffff;
-  --bubble-me: linear-gradient(135deg, #4f8ef7, #38c6d9);
-  --shadow: 0 2px 12px rgba(20, 30, 50, .08);
+  --ok: #58b89a;
+  --warn: #e8a24a;
+  --bubble-npc: #fffdfd;
+  --bubble-me: linear-gradient(135deg, #f27fa2, #b3a4e8);
+  --shadow: 0 2px 12px rgba(240, 170, 185, .18);
   --radius: 14px;
 }
 [data-theme="dark"] {
-  --bg: #12151c;
-  --card: #1b2029;
-  --card2: #171c25;
-  --ink: #e7eaf0;
-  --ink2: #9aa3b2;
-  --ink3: #5d6675;
-  --line: #2a3140;
-  --bubble-npc: #232a36;
+  --bg: #17131a;
+  --card: #221c24;
+  --card2: #1d1820;
+  --ink: #efe6ea;
+  --ink2: #a79aa1;
+  --ink3: #6a5c64;
+  --line: #322a31;
+  --bubble-npc: #2a232c;
   --shadow: 0 2px 14px rgba(0, 0, 0, .4);
+}
+
+/* 正文阅读：字体/字号/颜色（设置界面可调） */
+:root {
+  --plot-family: '';
+  --plot-color: '';
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }

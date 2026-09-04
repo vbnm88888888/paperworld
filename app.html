@@ -2,21 +2,21 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260904-g';</script>
-  <!-- build 20260904-g · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
+  <script>window.__HTML_BUILD__='20260904-h';</script>
+  <!-- build 20260904-h · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
   <meta http-equiv="Cache-Control" content="no-store">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#4f8ef7">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>纸上人间 · AI文字模拟游戏</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
-  <link rel="stylesheet" href="css/base.css?v=9">
-  <link rel="stylesheet" href="css/shelf.css?v=9">
-  <link rel="stylesheet" href="css/story.css?v=9">
-  <link rel="stylesheet" href="css/npc.css?v=9">
-  <link rel="stylesheet" href="css/editor.css?v=9">
-  <link rel="stylesheet" href="css/phone.css?v=9">
-  <script src="js/vendor/vue.global.prod.js?v=9"></script>
+  <link rel="stylesheet" href="css/base.css?v=10">
+  <link rel="stylesheet" href="css/shelf.css?v=10">
+  <link rel="stylesheet" href="css/story.css?v=10">
+  <link rel="stylesheet" href="css/npc.css?v=10">
+  <link rel="stylesheet" href="css/editor.css?v=10">
+  <link rel="stylesheet" href="css/phone.css?v=10">
+  <script src="js/vendor/vue.global.prod.js?v=10"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -80,13 +80,6 @@
         <!-- ===== 剧情 Tab ===== -->
         <div v-if="tab==='plot'">
           <div class="msg-list">
-            <div class="statusbar" v-if="story.useNineFormat && statusBar">
-              <div class="sb-left">
-                <span class="sb-item" v-if="statusBar.time">🕐 {{ statusBar.time }}</span>
-                <span class="sb-item" v-if="statusBar.day">📅 第{{ statusBar.day }}天</span>
-                <span class="sb-item sb-scene" v-if="statusBar.scene">📍 {{ statusBar.scene }}</span>
-              </div>
-            </div>
             <div class="plot-empty" v-if="!story.chat.messages.length && !busy">
               <div class="big">{{ story.cover.emoji }}</div>
               <h2>{{ story.title }}</h2>
@@ -101,33 +94,17 @@
               <template v-if="m.kind==='me'">
                 <div class="msg me"><div class="bubble">{{ m.text }}</div></div>
               </template>
-              <!-- GM 回复：九段式=分区卡片；普通模式=旁白+对话气泡 -->
+              <!-- GM 回复：九段式=9块分区，每部分一块与世界界面9段式一一对应；普通模式=旁白+对话气泡 -->
               <template v-else-if="m.kind==='ai'">
-                <template v-if="story.useNineFormat && !classicView">
-                  <div class="beat">
-                    <!-- 橙光式舞台：正文流 + 折叠情报面板（横竖统一） -->
-                    <template>
-                      <div class="nf-card nf-story beat-main" v-if="beatStoryPart(m)">
-                        <div class="nf-head" @click="togglePart(m,beatStoryPart(m))">
-                          <span class="nf-title">{{ beatStoryPart(m).title }}</span>
-                          <span class="nf-lock" v-if="beatStoryPart(m).locked" title="已锁定：后续生成会沿用">🔒</span>
-                          <span class="nf-chev" :class="{off: isPartCollapsed(m,beatStoryPart(m))}">▾</span>
-                          <span class="nf-ops" @click.stop>
-                            <button v-if="!isPartEditing(m,beatStoryPart(m))" @click="editPart(m,beatStoryPart(m))" title="编辑本分区">✎</button>
-                            <button v-if="!isPartEditing(m,beatStoryPart(m))" @click="rerollPart(m,beatStoryPart(m))" title="只重写本分区">↻</button>
-                            <button v-if="!isPartEditing(m,beatStoryPart(m))" @click="delPart(m,beatStoryPart(m))" title="删除本分区">✕</button>
-                          </span>
-                        </div>
-                        <div class="nf-body" v-if="!isPartCollapsed(m,beatStoryPart(m))">
-                          <template v-if="isPartEditing(m,beatStoryPart(m))">
-                            <textarea class="inp nf-edit" v-model="_partEdit.text" rows="8" placeholder="编辑本分区内容…"></textarea>
-                            <div class="nf-edit-ops">
-                              <button class="btn sm primary" @click="savePart">✔ 保存并锁定</button>
-                              <button class="btn sm" @click="cancelPart">取消</button>
-                            </div>
-                          </template>
-                          <template v-else>
-                            <template v-for="(b, bi) in storyBlocks(beatStoryPart(m).md)" :key="bi">
+                <template v-if="story.useNineFormat">
+                  <div class="nine-blocks">
+                    <!-- 每个分区一块；完整部分不分段；仅正文/心理活动 分段渲染(旁白+头像气泡) -->
+                    <template v-for="(sec, si) in layoutSections" :key="m.id+':s'+si">
+                      <div v-if="ninePart(m, sec.key)" class="nine-block" :class="'nb-'+sec.key">
+                        <div class="nb-head">{{ sec.title }}</div>
+                        <div class="nb-body">
+                          <template v-if="sec.key==='story' || sec.key==='mind'">
+                            <template v-for="(b, bi) in storyBlocks(ninePart(m, sec.key).md)" :key="bi">
                               <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span></div>
                               <div v-else-if="b.type==='say'" class="say">
                                 <div class="avatar">
@@ -139,45 +116,31 @@
                                   <div class="bubble" v-html="md(b.text)"></div>
                                 </div>
                               </div>
-                              <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
                             </template>
                           </template>
-                        </div>
-                      </div>
-                      <div class="intel-toggle" v-if="intelParts(m).length" @click="toggleIntel(m)">
-                        <span class="intel-ico">🗂</span>
-                        <span class="intel-title">情报（{{ intelParts(m).length }}）</span>
-                        <span class="intel-chev" :class="{off: isIntelCollapsed(m)}">▾</span>
-                      </div>
-                      <div class="intel-panel" v-show="!isIntelCollapsed(m)">
-                        <div class="nf-card" v-for="(p, pi) in intelParts(m)" :key="m.id+':i'+pi" :class="'nf-'+p.key">
-                          <div class="nf-head" @click="togglePart(m,p)">
-                            <span class="nf-title">{{ p.title }}</span>
-                            <span class="nf-lock" v-if="p.locked" title="已锁定：后续生成会沿用">🔒</span>
-                            <span class="nf-chev" :class="{off: isPartCollapsed(m,p)}">▾</span>
-                            <span class="nf-ops" @click.stop>
-                              <button v-if="!isPartEditing(m,p)" @click="editPart(m,p)" title="编辑本分区">✎</button>
-                              <button v-if="!isPartEditing(m,p)" @click="delPart(m,p)" title="删除本分区">✕</button>
-                            </span>
-                          </div>
-                          <div class="nf-body" v-if="!isPartCollapsed(m,p)">
-                            <template v-if="isPartEditing(m,p)">
-                              <textarea class="inp nf-edit" v-model="_partEdit.text" rows="8" placeholder="编辑本分区内容…"></textarea>
-                              <div class="nf-edit-ops">
-                                <button class="btn sm primary" @click="savePart">✔ 保存并锁定</button>
-                                <button class="btn sm" @click="cancelPart">取消</button>
-                              </div>
-                            </template>
-                            <div v-else class="nf-md" v-html="renderPartHTML(p)"></div>
-                          </div>
+                          <div v-else class="nb-md" v-html="renderPartHTML(ninePart(m, sec.key))"></div>
                         </div>
                       </div>
                     </template>
-                    <div class="nf-foot" @click="addPart(m)">＋ 添加分区</div>
-                    <!-- 自救：本条一条分区都没解析出来时，给出可见警示与一键修复（旧版缓存/解析异常不再静默） -->
-                    <div class="nf-warn" v-if="!beatStoryPart(m) && !intelParts(m).length"
-                         @click="forceReparse(m)"
-                         title="用最新解析器重新生成本条分区">⚠️ 本条未解析出分区（原文 {{ String(m.raw || m.text || '').length }} 字）· 点此强制重新解析</div>
+                    <!-- 兜底：解析不出任何分区时，整块显示原文（杜绝空屏） -->
+                    <div v-if="!nineParts(m).length" class="nine-block nb-story">
+                      <div class="nb-head">正文</div>
+                      <div class="nb-body">
+                        <template v-for="(b, bi) in storyBlocks(m.raw || m.text || '')" :key="'f'+bi">
+                          <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span></div>
+                          <div v-else-if="b.type==='say'" class="say">
+                            <div class="avatar">
+                              <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                              <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                            </div>
+                            <div class="body">
+                              <div class="name">{{ b.name }}</div>
+                              <div class="bubble" v-html="md(b.text)"></div>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
                   </div>
                 </template>
                 <template v-else>
@@ -222,52 +185,52 @@
 
             <!-- 流式输出中 -->
             <div class="msg" v-if="busy">
-              <template v-if="story.useNineFormat && !classicView">
-                <div class="beat" v-if="streamStoryPart || streamIntelParts.length">
-                  <!-- 橙光式舞台流式（正文 + 情报折叠，横竖统一） -->
-                  <template>
-                    <div class="nf-card nf-story beat-main" v-if="streamStoryPart">
-                      <div class="nf-head">
-                        <span class="nf-title">{{ streamStoryPart.title }}</span>
-                        <span class="nf-chev">▾</span>
-                      </div>
-                      <div class="nf-body">
-                        <template v-for="(b, bi) in storyBlocks(streamStoryPart.md)" :key="bi">
-                          <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span></div>
-                          <div v-else-if="b.type==='say'" class="say">
-                            <div class="avatar">
-                              <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
-                              <template v-else>{{ npcAvEmoji(b.name) }}</template>
+              <template v-if="story.useNineFormat">
+                <div class="nine-blocks" v-if="streamText">
+                  <template v-for="(sec, si) in layoutSections" :key="'ss'+si">
+                    <div v-if="streamNinePart(sec.key)" class="nine-block" :class="'nb-'+sec.key">
+                      <div class="nb-head">{{ sec.title }}</div>
+                      <div class="nb-body">
+                        <template v-if="sec.key==='story' || sec.key==='mind'">
+                          <template v-for="(b, bi) in storyBlocks(streamNinePart(sec.key).md)" :key="bi">
+                            <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span></div>
+                            <div v-else-if="b.type==='say'" class="say">
+                              <div class="avatar">
+                                <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                                <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                              </div>
+                              <div class="body">
+                                <div class="name">{{ b.name }}</div>
+                                <div class="bubble" v-html="md(b.text)"></div>
+                              </div>
                             </div>
-                            <div class="body">
-                              <div class="name">{{ b.name }}</div>
-                              <div class="bubble" v-html="md(b.text)"></div>
-                            </div>
-                          </div>
-                          <div v-else class="center"><div class="pill phone-pill">{{ b.text }}</div></div>
+                          </template>
                         </template>
-                        <span class="cursor-blink"></span>
-                      </div>
-                    </div>
-                    <div class="intel-toggle" v-if="streamIntelParts.length" @click="streamIntelOpen=!streamIntelOpen">
-                      <span class="intel-ico">🗂</span>
-                      <span class="intel-title">情报（{{ streamIntelParts.length }}）</span>
-                      <span class="intel-chev" :class="{off: !streamIntelOpen}">▾</span>
-                    </div>
-                    <div class="intel-panel" v-show="streamIntelOpen">
-                      <div class="nf-card" v-for="(p, pi) in streamIntelParts" :key="'si'+pi" :class="'nf-'+p.key">
-                        <div class="nf-head">
-                          <span class="nf-ico">{{ p.icon }}</span>
-                          <span class="nf-title">{{ p.title }}</span>
-                          <span class="nf-chev">▾</span>
-                        </div>
-                        <div class="nf-body">
-                          <div class="nf-md" v-html="renderPartHTML(p)"></div>
-                          <span v-if="pi===streamIntelParts.length-1" class="cursor-blink"></span>
-                        </div>
+                        <div v-else class="nb-md" v-html="renderPartHTML(streamNinePart(sec.key))"></div>
+                        <span v-if="si===layoutSections.length-1 || !layoutSections.length" class="cursor-blink"></span>
                       </div>
                     </div>
                   </template>
+                  <!-- 流式中正文还没归位时，整块显示原文 -->
+                  <div v-if="!streamNfParts().length" class="nine-block nb-story">
+                    <div class="nb-head">正文</div>
+                    <div class="nb-body">
+                      <template v-for="(b, bi) in storyBlocks(stripLive(streamText))" :key="'f'+bi">
+                        <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span></div>
+                        <div v-else-if="b.type==='say'" class="say">
+                          <div class="avatar">
+                            <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
+                            <template v-else>{{ npcAvEmoji(b.name) }}</template>
+                          </div>
+                          <div class="body">
+                            <div class="name">{{ b.name }}</div>
+                            <div class="bubble" v-html="md(b.text)"></div>
+                          </div>
+                        </div>
+                      </template>
+                      <span class="cursor-blink"></span>
+                    </div>
+                  </div>
                 </div>
                 <div class="beat beat-loading" v-else>
                   <span class="gen-hint">🎲 正在生成剧情…</span>
@@ -402,15 +365,6 @@
               <textarea v-if="sec._edit" class="inp nf-sec-prompt" v-model="sec.contentPrompt" placeholder="该分区的内容提示词（写什么 / 怎么写）……留空则只有格式规则"></textarea>
             </div>
           </div>
-
-          <div class="sec-title">角色扮演核心指令 <span class="line"></span>
-            <div class="switch" :class="{on: story.useCoreInstruction}" @click="story.useCoreInstruction=!story.useCoreInstruction"></div>
-          </div>
-          <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">
-            开启后此指令<b>替换</b>默认 GM 规则并置于最高优先级——适合粘贴你自己的完整扮演指令与输出格式（原文保存，随故事备份）
-          </div>
-          <textarea class="inp" style="min-height:200px;font-size:13px;font-family:inherit" v-model="story.coreInstruction" placeholder="把你的完整角色扮演核心指令粘贴到这里……"></textarea>
-          <div class="tok-est">≈ {{ coreTokens }} tokens</div>
 
           <div class="sec-title">世界规则 <span class="line"></span>
             <button class="btn sm" @click="addRule">＋ 加一条</button>
@@ -748,34 +702,11 @@
       </div>
       </div>
 
-      <!-- 剧情日志：右下角浮动按钮 + 底部抽屉 -->
-      <button class="log-fab" v-if="tab==='plot' && story.useNineFormat" @click="openLogDrawer()" title="剧情日志">
-        <span class="log-ico">📜</span><i v-if="logEntries.length">{{ logEntries.length }}</i>
-      </button>
-      <div class="log-mask" v-if="logDrawer" @click="logDrawer=false"></div>
-      <div class="log-drawer" :class="{open: logDrawer}" v-if="tab==='plot' && story.useNineFormat">
-        <div class="log-drawer-head">
-          <span class="log-ico">📜</span><b>剧情日志</b><span class="log-count">{{ logEntries.length }}</span>
-          <button class="close-x" @click="logDrawer=false">✕</button>
-        </div>
-        <div class="log-list" ref="logList">
-          <button class="log-item" v-for="(e, ei) in logEntries" :key="e.id" @click="logDrawer=false; jumpToBeat(e.id)">
-            <span class="log-time" v-if="e.time">{{ e.time }}</span>
-            <span class="log-scene" v-if="e.scene">{{ e.scene }}</span>
-            <span class="log-text">{{ e.first }}</span>
-          </button>
-          <div class="log-empty" v-if="!logEntries.length">暂无剧情节拍</div>
-        </div>
-      </div>
-
       <!-- 剧情工具条 + 输入区 -->
       <template v-if="tab==='plot'">
         <div class="plot-tools">
-          <button class="tool" @click="reroll" :disabled="busy">↻ 重掷</button>
-          <button class="tool" @click="continuePlot" :disabled="busy">▶ 继续</button>
           <button class="tool" @click="dice" :disabled="busy">🎲 随机事件</button>
           <button class="tool" :class="{on: oocMode}" @click="oocMode=!oocMode" title="作者指令，不进入剧情">OOC</button>
-          <button class="tool" @click="snapshotOpen=true">💾 存档</button>
         </div>
         <div class="inputbar">
           <textarea v-model="inputText" ref="inputBox" rows="1" :placeholder="oocMode ? 'OOC作者指令：如（让张三明天再出现）' : '你要做什么/说什么？'"
@@ -895,6 +826,23 @@
           <div class="s-ctrl" style="display:flex;align-items:center;gap:8px">
             <input type="range" min="14" max="20" step="1" v-model.number="settings.plotFont" style="width:110px">
             <span class="range-val">{{ settings.plotFont }}px</span>
+          </div>
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>正文字体</b><span>正文与对话使用的字体</span></div>
+          <select class="inp s-ctrl" style="width:auto" v-model="settings.plotFontFamily">
+            <option value="default">默认</option>
+            <option value="song">宋体（书卷感）</option>
+            <option value="kai">楷体（古风）</option>
+            <option value="yuan">圆体（可爱）</option>
+            <option value="hei">黑体（清晰）</option>
+          </select>
+        </div>
+        <div class="set-row">
+          <div class="s-label"><b>正文字色</b><span>正文与对话的文字颜色（留空=跟随主题）</span></div>
+          <div class="s-ctrl" style="display:flex;align-items:center;gap:8px">
+            <input type="color" v-model="settings.plotColor" style="width:44px;height:32px;border:none;background:none;padding:0">
+            <button class="btn sm ghost" @click="settings.plotColor=''">恢复默认</button>
           </div>
         </div>
         <div class="set-row">
@@ -1208,16 +1156,16 @@
   <div class="aff-fx" v-for="fx in affFxList" :key="fx.id" :style="fx.style">{{ fx.text }}</div>
 </div>
 
-<script src="js/config.js?v=9"></script>
-<script src="js/templates.js?v=9"></script>
-<script src="js/store.js?v=9"></script>
-<script src="js/api.js?v=9"></script>
-<script src="js/rag.js?v=9"></script>
-<script src="js/prompts.js?v=9"></script>
-<script src="js/avatars.js?v=9"></script>
-<script src="js/affinity.js?v=9"></script>
-<script src="js/randomnpc.js?v=9"></script>
-<script src="js/phone.js?v=9"></script>
-<script src="js/app.js?v=9"></script>
+<script src="js/config.js?v=10"></script>
+<script src="js/templates.js?v=10"></script>
+<script src="js/store.js?v=10"></script>
+<script src="js/api.js?v=10"></script>
+<script src="js/rag.js?v=10"></script>
+<script src="js/prompts.js?v=10"></script>
+<script src="js/avatars.js?v=10"></script>
+<script src="js/affinity.js?v=10"></script>
+<script src="js/randomnpc.js?v=10"></script>
+<script src="js/phone.js?v=10"></script>
+<script src="js/app.js?v=10"></script>
 </body>
 </html>

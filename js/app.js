@@ -51,8 +51,6 @@
         /* 九段式界面 */
         _collapsed: {},     // 分区折叠：key = msgId:partKey
         _partEdit: null,    // {msg, part, text} 正在编辑的分区
-        logDrawer: false,   // 剧情日志抽屉开关
-        streamIntelOpen: true, // 流式：情报面板展开/折叠（默认展开，九块分区全可见）
 
         /* 书架/向导 */
         showSettings: false,
@@ -163,50 +161,13 @@
         }
         return [{ type: 'main', blocks: this.parseAiBlocks(stripped) }];
       },
-      /* 九段式：流式输出实时解析成分区卡片 */
-      streamNfParts() {
-        if (!(this.story && this.story.useNineFormat)) return [];
-        return this.parseParts(this.streamText || '');
-      },
-      /* 横屏流式：正文分区 / 情报分区拆分 */
-      streamStoryPart() {
-        return (this.streamNfParts || []).find(p => p.key === 'story') || null;
-      },
-      streamIntelParts() {
-        const keys = ['map', 'cast', 'schedule', 'explore', 'aside', 'mind'];
-        return (this.streamNfParts || []).filter(p => keys.indexOf(p.key) >= 0);
-      },
-      /* 顶部吸顶状态栏：时间/场景/天数 */
-      statusBar() {
-        if (!this.story) return null;
-        const st = this.story.sessionState || {};
-        return { time: st.time || '', scene: st.scene || '', day: st.day || null };
-      },
-      /* 右侧剧情日志：每条AI节拍 = 时间/场景/首行正文摘要 */
-      logEntries() {
-        if (!this.story || !this.story.useNineFormat) return [];
-        const out = [];
-        for (const m of this.story.chat.messages) {
-          if (m.kind !== 'ai') continue;
-          const parts = this.nfParts(m);
-          if (!parts || !parts.length) continue;
-          const tp = parts.find(p => p.key === 'time');
-          const sp = parts.find(p => p.key === 'scene');
-          const st = parts.find(p => p.key === 'story');
-          let first = '';
-          if (st) {
-            const blocks = this.storyBlocks(st.md);
-            const b = blocks.find(x => x.type === 'say') || blocks.find(x => x.type === 'narr');
-            if (b) first = (b.type === 'say' ? b.name + '：' : '') + b.text;
-          }
-          out.push({
-            id: m.id,
-            time: tp ? ((tp.md.match(/\[\s*([^\]]+?)\s*\]/) || [])[1] || '') : '',
-            scene: sp ? ((sp.md.match(/\[\s*([^\]]+?)\s*\]/) || [])[1] || '') : '',
-            first: first.replace(/\s+/g, ' ').slice(0, 60)
-          });
-        }
-        return out;
+      /* ---------- 九段式 9 块分区渲染：与世界界面 9 段式一一对应 ---------- */
+      /* 布局来源：story.layout（世界界面可编辑 9 段式），禁用分区跳过 */
+      layoutSections() {
+        if (!this.story) return [];
+        const layout = (Array.isArray(this.story.layout) && this.story.layout.length)
+          ? this.story.layout : PW.DEFAULT_LAYOUT;
+        return (layout || []).filter(sec => sec.enabled !== false);
       },
       memRecent() { return this.mem.records.slice(-40).reverse(); },
       clock() {
@@ -252,16 +213,28 @@
     },
 
     methods: {
-      /* ---------- 主题 ---------- */
       /* ---------- 主题与外观 ---------- */
+      plotFamilyCss() {
+        const fam = (this.settings && this.settings.plotFontFamily) || 'default';
+        switch (fam) {
+          case 'song': return '"Songti SC","SimSun","宋体",serif';
+          case 'kai': return '"Kaiti SC","KaiTi","STKaiti","楷体",serif';
+          case 'yuan': return '"Yuanti SC","YouYuan","幼圆","PingFang SC",sans-serif';
+          case 'hei': return '"Heiti SC","SimHei","黑体","PingFang SC",sans-serif';
+          default: return '';
+        }
+      },
       applyTheme() {
         let dark = this.settings.theme === 'dark';
         if (this.settings.theme === 'auto') dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         this._resolvedTheme = dark ? 'dark' : 'light';
         document.documentElement.dataset.theme = this._resolvedTheme;
         document.documentElement.classList.toggle('has-bg', !!(this.settings.bg && this.settings.bg.img));
-        // 剧情字号
+        // 剧情字号 / 字体 / 正文字色（阅读体验）
         document.documentElement.style.setProperty('--plot-font', (this.settings.plotFont || 17) + 'px');
+        const fam = this.plotFamilyCss();
+        document.documentElement.style.setProperty('--plot-family', fam);
+        document.documentElement.style.setProperty('--plot-color', this.settings.plotColor || '');
         // 自定义背景
         let bgEl = document.getElementById('app-bg');
         const bg = this.settings.bg;
@@ -1127,6 +1100,21 @@
           .join('\n');
         return this.parseAiBlocks(clean);
       },
+      /* ---------- 九段式 9 块分区渲染辅助（模板内按 key 取分区，与世界界面 9 段式一一对应） ---------- */
+      /* 流式：实时解析全部分区 */
+      streamNfParts() {
+        if (!(this.story && this.story.useNineFormat)) return [];
+        return this.parseParts(this.streamText || '');
+      },
+      /* 某条消息指定 key 的分区（nfParts 自动迁移旧缓存） */
+      ninePart(m, key) {
+        return (this.nfParts(m) || []).find(p => p.key === key) || null;
+      },
+      nineParts(m) { return this.nfParts(m) || []; },
+      /* 流式：指定 key 的分区 */
+      streamNinePart(key) {
+        return (this.streamNfParts() || []).find(p => p.key === key) || null;
+      },
       /* ==================== 横屏舞台：情报面板 + 分区固定格式渲染 ==================== */
       /* 情报分区（宽屏下折叠进「情报」面板；时间/场景进HUD，正文单独展示） */
       intelParts(m) {
@@ -1139,18 +1127,6 @@
         return this._collapsed[k] !== undefined ? this._collapsed[k] : false;  // 情报默认展开：九块分区全部可见
       },
       toggleIntel(m) { const k = m.id + ':intel'; this._collapsed[k] = !this.isIntelCollapsed(m); },
-      /* 竖屏：打开剧情日志抽屉并滚动到底部 */
-      openLogDrawer() {
-        this.logDrawer = true;
-        this.$nextTick(() => {
-          const el = this.$refs.logList;
-          if (el) el.scrollTop = el.scrollHeight;
-        });
-      },
-      jumpToBeat(id) {
-        const el = document.querySelector('.msg[data-mid="' + id + '"]');
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      },
       affBarStyleStr(v) {
         const s = this.affBarStyle(v);
         return 'left:' + s.left + ';width:' + s.width + ';background:' + s.background;

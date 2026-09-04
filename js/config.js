@@ -2,7 +2,7 @@
 window.PW = window.PW || {};
 
 /* 构建版本：界面可见（书架底部/设置页），用于确认手机加载的不是旧缓存 */
-PW.BUILD = '20260904-g';
+PW.BUILD = '20260904-h';
 
 /* 分区解析器版本：改动解析逻辑时递增。旧消息的缓存分区会按此版本自动重析迁移 */
 PW.PARTS_VER = 'c1';
@@ -50,6 +50,8 @@ PW.DEFAULT_SETTINGS = {
   ctxMin: 14,                    // 上下文token下限(千)：压缩到低于此值为止
   customModels: [],              // 用户自定义模型ID
   plotFont: 17,                  // 剧情字号 px
+  plotFontFamily: 'default',     // 正文字体：default|song|kai|yuan|hei
+  plotColor: '',                 // 正文字色：留空=跟随主题
   bg: { img: '', opacity: 0.35, blur: 0 },  // 自定义背景
   guideSeen: false,
   lastErr: ''
