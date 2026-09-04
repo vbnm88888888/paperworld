@@ -56,6 +56,8 @@
 
         /* 书架/向导 */
         showSettings: false,
+        /* 合并显示（经典模式）：AI 回复合成为一整块旁白+对话气泡，不做九段式分区。默认开启 */
+        classicView: localStorage.getItem('pw.classic') !== '0',
         keyVisible: false,
         newModelId: '',
         wizard: { open: false, step: 0, genreKey: 'blank', title: '', idea: '', worldview: '', rules: [], npcs: [], player: { name: '', gender: '女', age: '', persona: '', avatar: null }, genBusy: false },
@@ -844,10 +846,17 @@
       },
       aiBlocks(m) {
         if (!this._aiCache.has(m.id)) {
-          if (this.story && this.story.useNineFormat) {
+          if (this.story && this.story.useNineFormat && !this.classicView) {
             this._aiCache.set(m.id, [{ type: 'nf', parts: this.nfParts(m) }]);
           } else {
-            this._aiCache.set(m.id, [{ type: 'main', blocks: this.parseAiBlocks(m.text) }]);
+            /* 合并显示（经典模式）：直接用完整原文渲染旁白+对话气泡；
+               去掉九段式段头行与隐藏标记，正文完整保留 */
+            const classicText = String(m.raw || m.text || '')
+              .replace(/\[\[AFF:[^\]]*\]\]/g, '')
+              .replace(/\[\[STATE:[^\]]*\]\]/g, '')
+              .replace(/^\s*\d+\s*[.、]\s*【[^】]*】\s*$/gm, '')
+              .replace(/^\s*---+\s*$/gm, '');
+            this._aiCache.set(m.id, [{ type: 'main', blocks: this.parseAiBlocks(classicText) }]);
           }
         }
         return this._aiCache.get(m.id);
@@ -1104,6 +1113,13 @@
         m.partsVer = VER;
         return m.parts;
       },
+      /* 合并显示（经典模式）开关：全局记忆 */
+      toggleClassic() {
+        this.classicView = !this.classicView;
+        localStorage.setItem('pw.classic', this.classicView ? '1' : '0');
+        this._aiCache.clear();
+      },
+
       /* 自救按钮：手动强制按最新解析器重解析本条（修复旧版本缓存出的空分区） */
       forceReparse(m) {
         m.parts = this.parseParts(m.raw || m.text || '');
@@ -1671,6 +1687,7 @@
           { icon: '🧹', label: '清空剧情（保留设定与角色）', fn: () => this.askClearPlot() },
           { icon: '✏️', label: '重命名故事', fn: () => { this.msgEdit = { open: true, text: this.story.title, msg: null, target: 'story' }; } },
           { icon: '🔧', label: '界面修复（重置分区显示）', fn: () => this.repairStoryUI() },
+          { icon: '🧩', label: this.classicView ? '切换九段式分区界面' : '切换合并显示（经典整块）', fn: () => this.toggleClassic() },
           { icon: '📚', label: '导出小说 txt', fn: () => PW.Store.exportStoryTxt(this.story) },
           { icon: '📄', label: '导出故事 JSON（含记忆）', fn: async () => {
               const st = JSON.parse(JSON.stringify(this.story));
