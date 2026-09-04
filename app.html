@@ -2,21 +2,21 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260904-e';</script>
-  <!-- build 20260904-e · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
+  <script>window.__HTML_BUILD__='20260904-f';</script>
+  <!-- build 20260904-f · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
   <meta http-equiv="Cache-Control" content="no-store">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#4f8ef7">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>纸上人间 · AI文字模拟游戏</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
-  <link rel="stylesheet" href="css/base.css?v=7">
-  <link rel="stylesheet" href="css/shelf.css?v=7">
-  <link rel="stylesheet" href="css/story.css?v=7">
-  <link rel="stylesheet" href="css/npc.css?v=7">
-  <link rel="stylesheet" href="css/editor.css?v=7">
-  <link rel="stylesheet" href="css/phone.css?v=7">
-  <script src="js/vendor/vue.global.prod.js?v=7"></script>
+  <link rel="stylesheet" href="css/base.css?v=8">
+  <link rel="stylesheet" href="css/shelf.css?v=8">
+  <link rel="stylesheet" href="css/story.css?v=8">
+  <link rel="stylesheet" href="css/npc.css?v=8">
+  <link rel="stylesheet" href="css/editor.css?v=8">
+  <link rel="stylesheet" href="css/phone.css?v=8">
+  <script src="js/vendor/vue.global.prod.js?v=8"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -109,7 +109,6 @@
                     <template>
                       <div class="nf-card nf-story beat-main" v-if="beatStoryPart(m)">
                         <div class="nf-head" @click="togglePart(m,beatStoryPart(m))">
-                          <span class="nf-ico">{{ beatStoryPart(m).icon }}</span>
                           <span class="nf-title">{{ beatStoryPart(m).title }}</span>
                           <span class="nf-lock" v-if="beatStoryPart(m).locked" title="已锁定：后续生成会沿用">🔒</span>
                           <span class="nf-chev" :class="{off: isPartCollapsed(m,beatStoryPart(m))}">▾</span>
@@ -129,7 +128,7 @@
                           </template>
                           <template v-else>
                             <template v-for="(b, bi) in storyBlocks(beatStoryPart(m).md)" :key="bi">
-                              <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
+                              <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span></div>
                               <div v-else-if="b.type==='say'" class="say">
                                 <div class="avatar">
                                   <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
@@ -153,7 +152,6 @@
                       <div class="intel-panel" v-show="!isIntelCollapsed(m)">
                         <div class="nf-card" v-for="(p, pi) in intelParts(m)" :key="m.id+':i'+pi" :class="'nf-'+p.key">
                           <div class="nf-head" @click="togglePart(m,p)">
-                            <span class="nf-ico">{{ p.icon }}</span>
                             <span class="nf-title">{{ p.title }}</span>
                             <span class="nf-lock" v-if="p.locked" title="已锁定：后续生成会沿用">🔒</span>
                             <span class="nf-chev" :class="{off: isPartCollapsed(m,p)}">▾</span>
@@ -187,7 +185,7 @@
                     <div v-if="sec.type==='doc'" class="md-doc" v-html="sec.html"></div>
                     <template v-else>
                       <template v-for="(b, bi) in sec.blocks" :key="bi">
-                        <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
+                        <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span></div>
                         <div v-else-if="b.type==='say'" class="say">
                           <div class="avatar">
                             <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
@@ -230,13 +228,12 @@
                   <template>
                     <div class="nf-card nf-story beat-main" v-if="streamStoryPart">
                       <div class="nf-head">
-                        <span class="nf-ico">{{ streamStoryPart.icon }}</span>
                         <span class="nf-title">{{ streamStoryPart.title }}</span>
                         <span class="nf-chev">▾</span>
                       </div>
                       <div class="nf-body">
                         <template v-for="(b, bi) in storyBlocks(streamStoryPart.md)" :key="bi">
-                          <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span></div>
+                          <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span></div>
                           <div v-else-if="b.type==='say'" class="say">
                             <div class="avatar">
                               <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
@@ -282,7 +279,7 @@
                   <div v-if="sec.type==='doc'" class="md-doc" v-html="sec.html"></div>
                   <template v-else>
                     <template v-for="(b, bi) in sec.blocks" :key="bi">
-                      <div v-if="b.type==='narr'" class="narr"><span class="narr-icon">{{ iconFor(b.text,'📜') }}</span><span v-html="md(b.text)"></span><span v-if="si===streamBlocks.length-1 && bi===sec.blocks.length-1" class="cursor-blink"></span></div>
+                      <div v-if="b.type==='narr'" class="narr"><span v-html="md(b.text)"></span><span v-if="si===streamBlocks.length-1 && bi===sec.blocks.length-1" class="cursor-blink"></span></div>
                       <div v-else-if="b.type==='say'" class="say">
                         <div class="avatar">
                           <img v-if="npcAvSrc(b.name)" :src="npcAvSrc(b.name)" alt="">
@@ -1211,16 +1208,16 @@
   <div class="aff-fx" v-for="fx in affFxList" :key="fx.id" :style="fx.style">{{ fx.text }}</div>
 </div>
 
-<script src="js/config.js?v=7"></script>
-<script src="js/templates.js?v=7"></script>
-<script src="js/store.js?v=7"></script>
-<script src="js/api.js?v=7"></script>
-<script src="js/rag.js?v=7"></script>
-<script src="js/prompts.js?v=7"></script>
-<script src="js/avatars.js?v=7"></script>
-<script src="js/affinity.js?v=7"></script>
-<script src="js/randomnpc.js?v=7"></script>
-<script src="js/phone.js?v=7"></script>
-<script src="js/app.js?v=7"></script>
+<script src="js/config.js?v=8"></script>
+<script src="js/templates.js?v=8"></script>
+<script src="js/store.js?v=8"></script>
+<script src="js/api.js?v=8"></script>
+<script src="js/rag.js?v=8"></script>
+<script src="js/prompts.js?v=8"></script>
+<script src="js/avatars.js?v=8"></script>
+<script src="js/affinity.js?v=8"></script>
+<script src="js/randomnpc.js?v=8"></script>
+<script src="js/phone.js?v=8"></script>
+<script src="js/app.js?v=8"></script>
 </body>
 </html>

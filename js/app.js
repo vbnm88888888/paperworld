@@ -52,12 +52,12 @@
         _collapsed: {},     // 分区折叠：key = msgId:partKey
         _partEdit: null,    // {msg, part, text} 正在编辑的分区
         logDrawer: false,   // 剧情日志抽屉开关
-        streamIntelOpen: false, // 流式：情报面板展开/折叠（默认收起）
+        streamIntelOpen: true, // 流式：情报面板展开/折叠（默认展开，九块分区全可见）
 
         /* 书架/向导 */
         showSettings: false,
-        /* 合并显示（经典模式）：AI 回复合成为一整块旁白+对话气泡，不做九段式分区。默认开启 */
-        classicView: localStorage.getItem('pw.classic') !== '0',
+        /* 合并显示（经典整块）：硬编码关闭=九段式分区界面为唯一显示方式 */
+        classicView: false,
         keyVisible: false,
         newModelId: '',
         wizard: { open: false, step: 0, genreKey: 'blank', title: '', idea: '', worldview: '', rules: [], npcs: [], player: { name: '', gender: '女', age: '', persona: '', avatar: null }, genBusy: false },
@@ -1113,13 +1113,6 @@
         m.partsVer = VER;
         return m.parts;
       },
-      /* 合并显示（经典模式）开关：全局记忆 */
-      toggleClassic() {
-        this.classicView = !this.classicView;
-        localStorage.setItem('pw.classic', this.classicView ? '1' : '0');
-        this._aiCache.clear();
-      },
-
       /* 自救按钮：手动强制按最新解析器重解析本条（修复旧版本缓存出的空分区） */
       forceReparse(m) {
         m.parts = this.parseParts(m.raw || m.text || '');
@@ -1142,7 +1135,7 @@
       beatStoryPart(m) { return (this.nfParts(m) || []).find(p => p.key === 'story') || null; },
       isIntelCollapsed(m) {
         const k = m.id + ':intel';
-        return this._collapsed[k] !== undefined ? this._collapsed[k] : true;  // 情报默认收起，保持正文清爽
+        return this._collapsed[k] !== undefined ? this._collapsed[k] : false;  // 情报默认展开：九块分区全部可见
       },
       toggleIntel(m) { const k = m.id + ':intel'; this._collapsed[k] = !this.isIntelCollapsed(m); },
       /* 竖屏：打开剧情日志抽屉并滚动到底部 */
@@ -1687,7 +1680,6 @@
           { icon: '🧹', label: '清空剧情（保留设定与角色）', fn: () => this.askClearPlot() },
           { icon: '✏️', label: '重命名故事', fn: () => { this.msgEdit = { open: true, text: this.story.title, msg: null, target: 'story' }; } },
           { icon: '🔧', label: '界面修复（重置分区显示）', fn: () => this.repairStoryUI() },
-          { icon: '🧩', label: this.classicView ? '切换九段式分区界面' : '切换合并显示（经典整块）', fn: () => this.toggleClassic() },
           { icon: '📚', label: '导出小说 txt', fn: () => PW.Store.exportStoryTxt(this.story) },
           { icon: '📄', label: '导出故事 JSON（含记忆）', fn: async () => {
               const st = JSON.parse(JSON.stringify(this.story));
