@@ -279,15 +279,22 @@ html.has-bg .beat { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8p
   border-left: 4px solid var(--nb-c, var(--acc));
   box-shadow: 0 2px 10px color-mix(in srgb, var(--nb-c, var(--acc)) 9%, transparent);
 }
-.nb-time     { --nb-c: #e8b04b; }
-.nb-scene    { --nb-c: #79a6e8; }
-.nb-map      { --nb-c: #58b89a; }
-.nb-cast     { --nb-c: #e8a24a; }
-.nb-story    { --nb-c: #f27fa2; }
-.nb-schedule { --nb-c: #a58cf0; }
-.nb-explore  { --nb-c: #5cc9c0; }
-.nb-aside    { --nb-c: #c3aab0; }
-.nb-mind     { --nb-c: #b58cf0; }
+/* 春日清新风：九个分区各一色，统一柔和粉/薄荷/雾蓝/丁香系，贴合页面主题 */
+.nb-time     { --nb-c: #eeb487; }  /* 暖杏 · 时间 */
+.nb-scene    { --nb-c: #8ec3f0; }  /* 雾蓝 · 场景 */
+.nb-map      { --nb-c: #7fd4b6; }  /* 薄荷 · 地图 */
+.nb-cast     { --nb-c: #f2a98d; }  /* 蜜桃 · 人员 */
+.nb-story    { --nb-c: #f27fa2; }  /* 樱粉 · 正文 */
+.nb-schedule { --nb-c: #a99df0; }  /* 丁香紫 · 日程 */
+.nb-explore  { --nb-c: #63d2cb; }  /* 湖水 · 探索 */
+.nb-aside    { --nb-c: #d3a7c3; }  /* 粉紫 · 旁白 */
+.nb-mind     { --nb-c: #bda2ee; }  /* 鸢尾紫 · 心理 */
+.nb-no {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; border-radius: 50%;
+  background: var(--nb-c, var(--acc));
+  color: #fff; font-size: 11px; font-weight: 800; line-height: 1; padding: 0 5px;
+}
 .nb-head {
   display: flex; align-items: center; gap: 7px;
   padding: 8px 13px;

@@ -162,12 +162,17 @@
         return [{ type: 'main', blocks: this.parseAiBlocks(stripped) }];
       },
       /* ---------- 九段式 9 块分区渲染：与世界界面 9 段式一一对应 ---------- */
-      /* 布局来源：story.layout（世界界面可编辑 9 段式），禁用分区跳过 */
+      /* 布局来源：story.layout（世界界面可编辑 9 段式），禁用分区跳过；
+         始终按九段式标准顺序（时间→场景→…→心理活动）排版，保证 1-9 顺序一致 */
       layoutSections() {
         if (!this.story) return [];
         const layout = (Array.isArray(this.story.layout) && this.story.layout.length)
           ? this.story.layout : PW.DEFAULT_LAYOUT;
-        return (layout || []).filter(sec => sec.enabled !== false);
+        const order = {};
+        (PW.NINE_SECTIONS || []).forEach((s, i) => { order[s.key] = i; });
+        return (layout || [])
+          .filter(sec => sec.enabled !== false)
+          .sort((a, b) => (order[a.key] ?? 99) - (order[b.key] ?? 99));
       },
       memRecent() { return this.mem.records.slice(-40).reverse(); },
       clock() {
@@ -759,7 +764,10 @@
           if (/^[\[\{]/.test(t)) { blocks.push({ type: 'narr', text: t }); continue; } // JSON/标记行不当台词
           const m = t.match(sayRe);
           if (m) {
-            let nm = m[1].trim(); const rest = m[2];
+            let nm = m[1].trim();
+            /* 心理活动等分区里 AI 可能用 **名字**：… 包一层加粗，剥掉后仍能匹配头像 */
+            nm = nm.replace(/^[\*_`~]+|[\*_`~]+$/g, '');
+            const rest = m[2];
             /* "林晚冲你眨眨眼：" 这种带动作的说话前缀 → 归一到NPC名 */
             let speaker = null;
             if (this.npcByName(nm) || nm === pn) speaker = nm;
@@ -1109,6 +1117,11 @@
       /* 某条消息指定 key 的分区（nfParts 自动迁移旧缓存） */
       ninePart(m, key) {
         return (this.nfParts(m) || []).find(p => p.key === key) || null;
+      },
+      /* 分区在九段式中的序号（1-9），用于标题前的顺序角标 */
+      nineNo(key) {
+        const i = (PW.NINE_SECTIONS || []).findIndex(s => s.key === key);
+        return i >= 0 ? i + 1 : '';
       },
       nineParts(m) { return this.nfParts(m) || []; },
       /* 流式：指定 key 的分区 */
