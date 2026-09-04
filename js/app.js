@@ -1077,10 +1077,12 @@
         return out;
       },
       nfParts(m) {
-        /* 显示逻辑硬保证：无论消息数据处于何种状态（旧缓存/部分锁定/缺正文），
-           最终必须产出含"正文"分区的分区数组 —— 正文卡片永远渲染，杜绝只剩"添加分区" */
-        if (!m.parts || !m.parts.length) {
+        /* 界面自动迁移：解析器升级后（PARTS_VER 变化），旧消息的缓存分区在下一次渲染时
+           自动按最新解析器全量重析——用户无需任何手动修复操作，打开界面即生效 */
+        const VER = (window.PW && PW.PARTS_VER) || 'v0';
+        if (!m.parts || !m.parts.length || m.partsVer !== VER) {
           m.parts = this.parseParts(m.raw || m.text || '');
+          m.partsVer = VER;
           return m.parts;
         }
         if (!m.parts.some(p => p.key === 'story')) {
@@ -1099,11 +1101,13 @@
           }
           m.parts = merged;
         }
+        m.partsVer = VER;
         return m.parts;
       },
       /* 自救按钮：手动强制按最新解析器重解析本条（修复旧版本缓存出的空分区） */
       forceReparse(m) {
         m.parts = this.parseParts(m.raw || m.text || '');
+        m.partsVer = (window.PW && PW.PARTS_VER) || 'v0';
         this._aiCache.delete(m.id);
       },
       /* 正文分区 → 头像气泡渲染（复用 parseAiBlocks） */

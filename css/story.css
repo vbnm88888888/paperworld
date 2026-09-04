@@ -350,6 +350,15 @@ html.has-bg .beat { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8p
 .stage-row { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .story-main { flex: 1; min-width: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
+/* 竖屏保底：手机浏览器工具栏/键盘会挤压 100dvh，flex 允许内容区塌缩到近 0
+   （表现为剧情全部不可见、只剩零星控件）。给内容区强制保底高度，永不允许塌缩；
+   极端挤压时整个视图可滚动，保证输入框/按钮永远可达 */
+@media (max-width: 760px) {
+  .story-view { overflow-y: auto; }
+  .stage-row { min-height: 46vh; }
+  .story-main { min-height: 46vh; }
+}
+
 .log-ico { font-size: 16px; }
 .log-count { font-size: 11px; color: var(--ink3); background: var(--card2); border-radius: 10px; padding: 1px 8px; }
 .log-list { flex: 1; overflow-y: auto; padding: 8px; }
