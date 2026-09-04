@@ -927,7 +927,10 @@
       partKeyOfTitle(title) {
         const T = String(title || '');
         if (/地图/.test(T)) return 'map';
+        /* 时间：识别"时间"及AI常写的时间戳头（如 "9月1日 星期一 06:47:23"） */
         if (/时间/.test(T)) return 'time';
+        if (/时间流逝|^\s*\d{1,2}\s*月\s*\d{1,2}\s*日/.test(T)) return 'time';
+        if (/(星期[一二三四五六日天]|周[一二三四五六日天])\s*$/.test(T) && /\d/.test(T)) return 'time';
         if (/场景/.test(T)) return 'scene';
         if (/在场|人员动向|出场/.test(T)) return 'cast';
         if (/日程/.test(T)) return 'schedule';
@@ -949,7 +952,14 @@
         const flush = () => {
           if (cur) {
             const mmd = cur.md.replace(/^\s+|\s+$/g, '');
-            if (mmd) out.push({ key: cur.key, title: cur.title, icon: this.partDef(cur.key).icon, md: mmd, locked: false });
+            if (mmd) {
+              /* 重复的正文分区（如时间戳误判+真正文头）合并为一个，避免界面出现两张正文卡 */
+              if (cur.key === 'story') {
+                const ex = out.find(p => p.key === 'story');
+                if (ex) { ex.md = (ex.md + '\n\n' + mmd).trim(); cur = null; return; }
+              }
+              out.push({ key: cur.key, title: cur.title, icon: this.partDef(cur.key).icon, md: mmd, locked: false });
+            }
             cur = null;
           }
         };
@@ -975,6 +985,53 @@
           const existing = out.find(p => p.key === 'story');
           if (existing) existing.md = (preText + '\n' + existing.md).trim();
           else out.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: preText, locked: false });
+        }
+        /* 关键修复：AI 常把剧情散文写在【当前场景】/【在场人员动向】段下（无段头直排），
+           导致正文卡片近乎空白、剧情被埋进默认折叠的情报面板。
+           这里把场景/人员段中的连续叙事段抽取回正文分区，保证剧情始终可见。 */
+        const isMarkerLine = (ln) => {
+          const t = ln.trim();
+          if (!t) return true;
+          if (/^[\[【［｛{]/.test(t)) return true;                       // [标记] 【标记】行
+          if (/^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u.test(t)) return true; // emoji标记行（🌟🏛✅等）
+          /* 短标签行（如 "轮次：2"）：冒号后紧跟引号的是对话（沈砚：「早。」），必须保留为正文 */
+          const m = t.match(/^([^：:]{1,8})[：:](.*)$/);
+          if (m && !/^[「“'"『]/.test(m[2]) && m[2].length <= 12 && !/[。，！？]/.test(m[2])) return true;
+          return false;
+        };
+        const extractProse = (md) => {
+          const lines = String(md).split('\n');
+          const kept = []; const prose = []; let buf = [];
+          const flushBuf = () => { if (buf.length) { const s = buf.join('\n').replace(/^\s+|\s+$/g, ''); if (s) prose.push(s); buf = []; } };
+          for (const ln of lines) {
+            if (isMarkerLine(ln)) { flushBuf(); kept.push(ln); }
+            else buf.push(ln);
+          }
+          flushBuf();
+          const good = prose.filter(s => s.length >= 40);               // 只回收成段的叙事
+          return { kept: kept.join('\n').replace(/^\s+|\s+$/g, ''), prose: good };
+        };
+        {
+          const proseAll = [];
+          out.forEach(p => {
+            if (p.key !== 'scene' && p.key !== 'cast') return;
+            if (!p.md || String(p.md).length < 80) return;              // 内容太短不抽，避免误伤
+            const r = extractProse(p.md);
+            if (r.prose.length) { proseAll.push(...r.prose); p.md = r.kept; }
+          });
+          if (proseAll.length) {
+            const proseText = proseAll.join('\n\n').trim();
+            const sp = out.find(p => p.key === 'story');
+            if (sp) sp.md = (proseText + '\n\n' + String(sp.md || '').trim()).trim();
+            else out.push({ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: proseText, locked: false });
+          }
+          /* 安全去重：任何路径下都只保留一个正文分区，多余内容并入第一个 */
+          const storyParts = out.filter(p => p.key === 'story');
+          if (storyParts.length > 1) {
+            const first = storyParts[0];
+            for (let i = 1; i < storyParts.length; i++) first.md = (first.md + '\n\n' + storyParts[i].md).trim();
+            for (let i = storyParts.length - 1; i >= 1; i--) out.splice(out.indexOf(storyParts[i]), 1);
+          }
         }
         /* AI 漏输出【正文】头时，时间/场景分区可能被正文污染，把多余行抽出来当正文 */
         if (!out.some(p => p.key === 'story')) {
