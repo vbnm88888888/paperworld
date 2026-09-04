@@ -1,4 +1,29 @@
 /* ============ 纸上人间 · 应用主体 ============ */
+/* HTML 版本自检：页面被浏览器快照/云加速缓存劫持时，自动强制刷新到最新版 */
+(function () {
+  function htmlBuildOf(text) {
+    const m = String(text || '').match(/__HTML_BUILD__\s*=\s*'([^']+)'/);
+    return m ? m[1] : '';
+  }
+  const mine = window.__HTML_BUILD__ || '';
+  try {
+    fetch(location.pathname + '?__ck=' + Date.now(), { cache: 'no-store' })
+      .then(r => r.text())
+      .then(t => {
+        const live = htmlBuildOf(t);
+        if (live && mine && live !== mine) {
+          const n = parseInt(sessionStorage.getItem('pw.forceReload') || '0', 10);
+          if (n < 2) {
+            sessionStorage.setItem('pw.forceReload', String(n + 1));
+            location.replace(location.pathname + '?__ts=' + Date.now());
+          }
+        } else {
+          sessionStorage.removeItem('pw.forceReload');
+        }
+      })
+      .catch(() => {});
+  } catch (e) { /* 无网络时静默跳过 */ }
+})();
 (function () {
   const { createApp } = Vue;
 
