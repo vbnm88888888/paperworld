@@ -30,24 +30,10 @@
 .p-app:active .icon { transform: scale(.9); }
 .p-app .icon.wx { background: linear-gradient(135deg, #2aae67, #22a04f); }
 .p-app .icon.wb { background: linear-gradient(135deg, #e6552e, #d43c17); }
-.p-app .icon.sc { background: linear-gradient(135deg, #8f7ecf, #5f4fae); }
-.p-app .icon.mm { background: linear-gradient(135deg, #b58fd0, #8a63ad); }
 .p-app .icon.sms { background: linear-gradient(135deg, #4f8ef7, #38c6d9); }
 .p-app .icon.camera { background: linear-gradient(135deg, #f7b84f, #f78fb0); }
 .p-app span { font-size: 11px; color: rgba(255,255,255,.9); }
 .p-app .red-dot { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; border-radius: 9px; background: #ff3b30; color: #fff; font-size: 10.5px; display: flex; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid rgba(255,255,255,.25); }
-
-/* 日程 / 回忆 app 内部 */
-.p-sched { padding: 4px 2px; font-size: 13px; white-space: normal; }
-.p-sched .card-schedule, .p-sched .sch-sec, .p-sched .sch-title {
-  background: var(--card); border-color: var(--line); --nb-c: var(--acc);
-}
-.p-memo-summary {
-  margin: 0 0 12px; padding: 11px 13px; border-radius: 10px;
-  background: color-mix(in srgb, var(--gold) 8%, var(--card));
-  border: 1px dashed color-mix(in srgb, var(--gold) 40%, var(--line));
-  font-size: 13px; line-height: 1.8; color: var(--ink2); white-space: pre-wrap;
-}
 
 /* App 通用头部 + 内部Tab */
 .app-head {

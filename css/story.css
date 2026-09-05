@@ -57,15 +57,22 @@ html.has-bg .md-doc {
   -webkit-backdrop-filter: blur(8px);
 }
 
-/* ---------- 对话气泡 ---------- */
+/* ---------- 对话气泡：立绘式（大头像 + 名字在头像下方，galgame舞台位） ---------- */
 @keyframes avPop { 0% { transform: scale(.4) translateY(5px); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
-.msg .say { display: flex; gap: 10px; margin-top: 14px; align-items: flex-start; }
-.msg .say .avatar { width: 38px; height: 38px; animation: avPop .38s cubic-bezier(.2, 1.3, .4, 1) both; }
-.msg .say .body { max-width: calc(100% - 62px); }
-.msg .say .name {
-  font-family: var(--head-font); font-size: 12.5px; letter-spacing: .18em;
-  color: var(--gold); margin-bottom: 4px; padding-left: 2px;
+.msg .say { position: relative; display: block; padding-left: 68px; min-height: 82px; margin-top: 16px; }
+.msg .say .avatar {
+  position: absolute; left: 0; top: 0; width: 56px; height: 56px; border-radius: 14px; font-size: 26px;
+  box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent);
+  animation: avPop .38s cubic-bezier(.2, 1.3, .4, 1) both;
 }
+.msg .say .name {
+  position: absolute; left: 0; top: 60px; width: 56px; text-align: center;
+  font-family: var(--head-font); font-size: 12.5px; letter-spacing: .12em;
+  color: var(--gold); margin: 0; padding: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.msg .say .body { max-width: 100%; }
+.msg .say .bubble { margin-top: 2px; }
 .msg .say .bubble {
   background: var(--bubble-npc); border: 1px solid var(--line);
   border-radius: 2px 12px 12px 12px;
@@ -258,7 +265,7 @@ html.has-bg .intel-rail { background: color-mix(in srgb, var(--card) 72%, transp
 .nf-sec-prompt { width: 100%; min-height: 110px; font-size: 13.5px; line-height: 1.7; border-top: 1px dashed var(--line); border-radius: 0; }
 
 /* ---------- 选项（VN式长条） ---------- */
-.choices { display: flex; flex-direction: column; gap: 9px; margin: 12px 0 4px 48px; }
+.choices { display: flex; flex-direction: column; gap: 9px; margin: 12px 0 4px 68px; }
 .choices .choice {
   position: relative; text-align: left; padding: 11px 16px 11px 24px; font-size: 14px;
   background: color-mix(in srgb, var(--card) 62%, transparent);
