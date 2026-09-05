@@ -117,16 +117,44 @@
       },
       sortedStories() { return this.stories.slice().sort((a, b) => b.updatedAt - a.updatedAt); },
       tabs() {
+        const ico = n => '<svg class="ico" viewBox="0 0 24 24"><use href="#i-' + n + '"/></svg>';
         const t = [
-          { id: 'plot', em: '📖', name: '剧情' },
-          { id: 'npc', em: '👥', name: '角色' },
-          { id: 'world', em: '🌍', name: '世界' },
-          { id: 'memory', em: '🧠', name: '记忆' }
+          { id: 'plot', em: ico('book'), name: '剧情' },
+          { id: 'npc', em: ico('users'), name: '角色' },
+          { id: 'world', em: ico('globe'), name: '世界' },
+          { id: 'memory', em: ico('mind'), name: '记忆' }
         ];
-        if (this.story && this.story.settings.phoneEnabled) t.push({ id: 'phone', em: '📱', name: '手机' });
+        if (this.story && this.story.settings.phoneEnabled) t.push({ id: 'phone', em: ico('phone'), name: '手机' });
         return t;
       },
       presentNpcs() { return this.story ? this.story.npcs.filter(n => n.present !== false) : []; },
+      /* 最新一条 AI 回复：横屏情报栏 / 竖屏状态条的数据源 */
+      lastAi() {
+        if (!this.story) return null;
+        const list = this.story.chat.messages;
+        for (let i = list.length - 1; i >= 0; i--) if (list[i].kind === 'ai') return list[i];
+        return null;
+      },
+      /* 情报栏分区：时间/场景/地图/人员/日程/探索/旁白（正文与心理留在剧情流） */
+      railParts() {
+        if (!(this.story && this.story.useNineFormat)) return [];
+        const keys = ['time', 'scene', 'map', 'cast', 'schedule', 'explore', 'aside'];
+        return this.layoutSections.filter(s => keys.indexOf(s.key) >= 0 && this.railPartOf(s.key));
+      },
+      /* 竖屏状态条：时间 + 场景（流式时实时跟随） */
+      stripParts() {
+        if (!(this.story && this.story.useNineFormat)) return [];
+        const out = [];
+        ['time', 'scene'].forEach(k => {
+          const p = this.railPartOf(k);
+          if (!p) return;
+          let t = String(p.md || '').split('\n')[0].replace(/[\[\]【】]/g, '').trim();
+          if (k === 'time') t = t.split('｜')[0].split('|')[0].trim();
+          if (t) out.push({ key: k, text: t });
+        });
+        return out;
+      },
+      themeIco() { return this._resolvedTheme === 'dark' ? '#i-moon' : '#i-sun'; },
       phoneEnabled() { return !!(this.story && this.story.settings.phoneEnabled); },
       skinStyle() {
         if (!this.story) return {};
@@ -193,8 +221,7 @@
           if (last && last.role === 'npc') c++;
         });
         return c;
-      },
-      themeEmoji() { return this._resolvedTheme === 'dark' ? '🌙' : '☀️'; }
+      }
     },
 
     watch: {
@@ -1109,21 +1136,35 @@
         return this.parseAiBlocks(clean);
       },
       /* ---------- 九段式 9 块分区渲染辅助（模板内按 key 取分区，与世界界面 9 段式一一对应） ---------- */
-      /* 流式：实时解析全部分区 */
+      /* 流式：实时解析全部分区（按文本缓存，流式期间多处取用不重复解析） */
       streamNfParts() {
         if (!(this.story && this.story.useNineFormat)) return [];
-        return this.parseParts(this.streamText || '');
+        const txt = this.streamText || '';
+        if (this._streamPartsTxt === txt && this._streamParts) return this._streamParts;
+        this._streamParts = this.parseParts(txt);
+        this._streamPartsTxt = txt;
+        return this._streamParts;
       },
       /* 某条消息指定 key 的分区（nfParts 自动迁移旧缓存） */
       ninePart(m, key) {
         return (this.nfParts(m) || []).find(p => p.key === key) || null;
       },
-      /* 分区在九段式中的序号（1-9），用于标题前的顺序角标 */
+      /* 分区在九段式中的序号（壹-玖），用于标题前的顺序角标 */
       nineNo(key) {
+        const CN = ['壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
         const i = (PW.NINE_SECTIONS || []).findIndex(s => s.key === key);
-        return i >= 0 ? i + 1 : '';
+        return i >= 0 ? (CN[i] || i + 1) : '';
       },
       nineParts(m) { return this.nfParts(m) || []; },
+      /* 情报栏图标：分区 key → sprite id */
+      railIcon(key) {
+        return ({ time: 'clock', scene: 'pin', map: 'map', cast: 'users', story: 'book', schedule: 'cal', explore: 'compass', aside: 'chat', mind: 'spark' })[key] || 'book';
+      },
+      /* 情报栏/状态条取分区：流式中实时跟随，否则取最新一条 AI 回复 */
+      railPartOf(key) {
+        if (this.busy && this.streamText) return this.streamNinePart(key);
+        return this.lastAi ? this.ninePart(this.lastAi, key) : null;
+      },
       /* 流式：指定 key 的分区 */
       streamNinePart(key) {
         return (this.streamNfParts() || []).find(p => p.key === key) || null;
