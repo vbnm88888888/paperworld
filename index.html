@@ -2,19 +2,19 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260905-b';</script>
+  <script>window.__HTML_BUILD__='20260905-c';</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0e1320">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>纸上人间 · AI文字模拟游戏</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
-  <link rel="stylesheet" href="css/base.css?v=13">
-  <link rel="stylesheet" href="css/shelf.css?v=13">
-  <link rel="stylesheet" href="css/story.css?v=13">
-  <link rel="stylesheet" href="css/npc.css?v=13">
-  <link rel="stylesheet" href="css/editor.css?v=13">
-  <link rel="stylesheet" href="css/phone.css?v=13">
-  <script src="js/vendor/vue.global.prod.js?v=13"></script>
+  <link rel="stylesheet" href="css/base.css?v=14">
+  <link rel="stylesheet" href="css/shelf.css?v=14">
+  <link rel="stylesheet" href="css/story.css?v=14">
+  <link rel="stylesheet" href="css/npc.css?v=14">
+  <link rel="stylesheet" href="css/editor.css?v=14">
+  <link rel="stylesheet" href="css/phone.css?v=14">
+  <script src="js/vendor/vue.global.prod.js?v=14"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -102,19 +102,19 @@
         </div>
       </div>
 
+      <!-- 顶部迷你Tab（原底部导航上移缩小，剧情主区最大化） -->
+      <div class="story-side">
+        <nav class="tabbar">
+          <div class="tab" v-for="t in tabs" :key="t.id" :class="{on: tab===t.id}" @click="switchTab(t.id)">
+            <span class="em" v-html="t.em"></span><span class="tab-name">{{ t.name }}</span>
+          </div>
+        </nav>
+      </div>
+
       <div class="stage-row">
       <div class="story-main" ref="mainScroll">
         <!-- ===== 剧情 Tab ===== -->
         <div v-if="tab==='plot'">
-          <!-- 竖屏状态条：时间/场景/在场（横屏时隐藏，由情报栏接管） -->
-          <div class="intel-strip" v-if="stripParts.length || presentNpcs.length">
-            <span class="is-chip" v-for="p in stripParts" :key="p.key"><svg class="ico"><use :href="'#i-'+railIcon(p.key)"/></svg>{{ p.text }}</span>
-            <span class="is-sep" v-if="stripParts.length && presentNpcs.length"></span>
-            <span class="is-ava" v-for="n in presentNpcs" :key="n.id" :title="n.name">
-              <img v-if="avSrc(n)" :src="avSrc(n)" alt="">
-              <template v-else>{{ avEmoji(n) }}</template>
-            </span>
-          </div>
           <div class="msg-list">
             <div class="plot-empty" v-if="!story.chat.messages.length && !busy">
               <div class="big">{{ story.cover.emoji }}</div>
@@ -177,6 +177,10 @@
                         </template>
                       </div>
                     </div>
+                  </div>
+                  <!-- 九段缺段提示：本回复缺少的分区（长按消息可手动补录） -->
+                  <div class="nf-missing" v-if="missingParts(m).length">
+                    ⚠️ 本回复缺少：{{ missingParts(m).map(function(s){ return s.title; }).join('、') }}（长按本条 → 编辑分区可手动补录）
                   </div>
                 </template>
                 <template v-else>
@@ -368,8 +372,16 @@
               <div class="switch" :class="{on: story.useNineFormat}" @click="story.useNineFormat=!story.useNineFormat"></div>
             </div>
             <div class="set-row">
+              <div class="s-label"><b>娱乐圈模式</b><span>资本视角：拍戏/综艺/发歌/热搜/包养爬床与艺人段位晋升（微博仅此模式开启）</span></div>
+              <div class="switch" :class="{on: story.settings.entMode}" @click="story.settings.entMode=!story.settings.entMode"></div>
+            </div>
+            <div class="set-row" v-if="entModeOn">
               <div class="s-label"><b>饭圈生态</b><span>微博/朋友圈按娱乐圈饭圈口吻生成（唯粉/cpf/营销号）</span></div>
               <div class="switch" :class="{on: story.settings.fandom}" @click="story.settings.fandom=!story.settings.fandom"></div>
+            </div>
+            <div class="set-row" v-if="!entModeOn">
+              <div class="s-label"><b>饭圈生态</b><span>开启娱乐圈模式后可用</span></div>
+              <div class="switch"></div>
             </div>
             <div class="set-row">
               <div class="s-label"><b>手机世界</b><span>微信/朋友圈/微博模拟</span></div>
@@ -468,12 +480,13 @@
               <div class="p-screen">
 
                 <!-- 桌面 -->
-                <div class="p-home" v-if="phoneView==='home'">
+                <div class="p-home" v-if="phoneView==='home'" :style="phoneWallStyle">
+                  <div class="p-wall-scrim" v-if="phoneWallOn"></div>
                   <div class="p-time">{{ clockShort }}</div>
                   <div class="p-date">{{ dateStr }}</div>
                   <div class="p-apps">
                     <div class="p-app" @click="openWxApp"><div class="icon wx">💬<span class="red-dot" v-if="wxUnread">{{ wxUnread }}</span></div><span>微信</span></div>
-                    <div class="p-app" @click="openWbApp"><div class="icon wb">🔥<span class="red-dot" v-if="!story.phone.weibo.posts.length">new</span></div><span>微博</span></div>
+                    <div class="p-app" v-if="entModeOn" @click="openWbApp"><div class="icon wb">🔥<span class="red-dot" v-if="!story.phone.weibo.posts.length">new</span></div><span>微博</span></div>
                     <div class="p-app" @click="phoneView='sched'"><div class="icon sc">📅</div><span>日程</span></div>
                     <div class="p-app" @click="phoneView='memo'"><div class="icon mm">💭</div><span>回忆</span></div>
                   </div>
@@ -811,15 +824,6 @@
         </div>
       </template>
     </div>
-
-    <!-- 底部/侧边 Tab -->
-    <div class="story-side">
-      <div class="tabbar">
-        <div class="tab" v-for="t in tabs" :key="t.id" :class="{on: tab===t.id}" @click="switchTab(t.id)">
-          <span class="em" v-html="t.em"></span>{{ t.name }}
-        </div>
-      </div>
-    </div>
   </div>
 
   <!-- ==================== 弹层们 ==================== -->
@@ -915,6 +919,14 @@
             <span style="font-size:12px;color:var(--ink2);width:52px">模糊</span>
             <input type="range" min="0" max="12" step="1" v-model.number="settings.bg.blur" style="flex:1">
             <span class="range-val">{{ settings.bg.blur }}px</span>
+          </div>
+        </div>
+        <div class="set-row" style="flex-direction:column;align-items:stretch">
+          <div class="s-label" style="margin-bottom:8px"><b>手机壁纸</b><span>手机桌面背景，只保存在本机（留空=随故事封面）</span></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label class="btn sm" style="cursor:pointer">🖼 上传壁纸<input type="file" accept="image/*" style="display:none" @change="onWallpaperFile"></label>
+            <button class="btn sm ghost" v-if="phoneWallOn" @click="clearWallpaper">恢复默认</button>
+            <span class="chip gray" v-if="phoneWallOn">已启用</span>
           </div>
         </div>
         <div class="set-row">
@@ -1081,6 +1093,17 @@
         <div class="field"><label>性格</label><textarea class="inp" rows="2" v-model="drawer.form.personality" placeholder="表面怎么样，内里怎么样，在意什么……"></textarea></div>
         <div class="field"><label>外貌</label><textarea class="inp" rows="2" v-model="drawer.form.appearance"></textarea></div>
         <div class="field"><label>说话风格</label><input class="inp" v-model="drawer.form.speech" placeholder="如：毒舌但心软，句句带刺"></div>
+        <div class="field"><label>艺人段位（娱乐圈模式晋升路线）</label>
+          <select class="inp" v-model="drawer.form.tier">
+            <option value="">非艺人 / 不设置</option>
+            <option>素人</option>
+            <option>十八线</option>
+            <option>三线</option>
+            <option>二线</option>
+            <option>一线</option>
+            <option>超一线</option>
+          </select>
+        </div>
         <div class="field"><label>与玩家的初始关系</label><input class="inp" v-model="drawer.form.relation"></div>
         <div class="field"><label>隐藏秘密（只有AI知道，需要剧情铺垫才会揭示）</label><textarea class="inp" rows="2" v-model="drawer.form.secret"></textarea></div>
         <div class="field"><label>开场白</label><textarea class="inp" rows="2" v-model="drawer.form.greeting"></textarea></div>
@@ -1252,16 +1275,16 @@
   <div class="aff-fx" v-for="fx in affFxList" :key="fx.id" :style="fx.style">{{ fx.text }}</div>
 </div>
 
-<script src="js/config.js?v=13"></script>
-<script src="js/templates.js?v=13"></script>
-<script src="js/store.js?v=13"></script>
-<script src="js/api.js?v=13"></script>
-<script src="js/rag.js?v=13"></script>
-<script src="js/prompts.js?v=13"></script>
-<script src="js/avatars.js?v=13"></script>
-<script src="js/affinity.js?v=13"></script>
-<script src="js/randomnpc.js?v=13"></script>
-<script src="js/phone.js?v=13"></script>
-<script src="js/app.js?v=13"></script>
+<script src="js/config.js?v=14"></script>
+<script src="js/templates.js?v=14"></script>
+<script src="js/store.js?v=14"></script>
+<script src="js/api.js?v=14"></script>
+<script src="js/rag.js?v=14"></script>
+<script src="js/prompts.js?v=14"></script>
+<script src="js/avatars.js?v=14"></script>
+<script src="js/affinity.js?v=14"></script>
+<script src="js/randomnpc.js?v=14"></script>
+<script src="js/phone.js?v=14"></script>
+<script src="js/app.js?v=14"></script>
 </body>
 </html>

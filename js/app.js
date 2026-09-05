@@ -141,28 +141,13 @@
         const keys = ['time', 'scene', 'map', 'cast', 'schedule', 'explore', 'aside'];
         return this.layoutSections.filter(s => keys.indexOf(s.key) >= 0 && this.railPartOf(s.key));
       },
-      /* 竖屏状态条：时间 + 场景（流式时实时跟随，兼容粗斜体/引用块装饰） */
-      stripParts() {
-        if (!(this.story && this.story.useNineFormat)) return [];
-        const out = [];
-        ['time', 'scene'].forEach(k => {
-          const p = this.railPartOf(k);
-          if (!p) return;
-          let t = '';
-          this.plainLines(p.md).some(l => {
-            if (!l) return false;
-            const c = l.replace(/[【】\[\]]/g, '').trim();
-            if (k === 'time') {
-              const main = c.split(/时间流逝/)[0].replace(/[\s*_（(]+$/, '').trim();
-              if (/\d{1,2}\s*月/.test(main)) { t = main; return true; }
-              return false;
-            }
-            if (c && !/时间流逝|理由/.test(c)) { t = c; return true; }
-            return false;
-          });
-          if (t) out.push({ key: k, text: t });
-        });
-        return out;
+      /* 娱乐圈模式：微博/饭圈与资本玩法开关 */
+      entModeOn() { return !!(this.story && this.story.settings && this.story.settings.entMode); },
+      /* 手机桌面壁纸（自定义 > 故事封面渐变兜底） */
+      phoneWallOn() { return !!(this.settings.phoneWallpaper && this.settings.phoneWallpaper.img); },
+      phoneWallStyle() {
+        if (!this.phoneWallOn) return {};
+        return { backgroundImage: 'url(' + this.settings.phoneWallpaper.img + ')', backgroundSize: 'cover', backgroundPosition: 'center' };
       },
       themeIco() { return this._resolvedTheme === 'dark' ? '#i-moon' : '#i-sun'; },
       phoneEnabled() { return !!(this.story && this.story.settings.phoneEnabled); },
@@ -308,6 +293,20 @@
       clearBg() {
         this.settings.bg = { img: '', opacity: 0.35, blur: 0 };
         this.applyTheme();
+      },
+      /* 手机桌面壁纸 */
+      onWallpaperFile(ev) {
+        const f = ev.target.files && ev.target.files[0];
+        if (!f) return;
+        PW.Store.compressImage(f, 1280, url => {
+          this.settings.phoneWallpaper = { img: url };
+          this.toast('手机壁纸已更换', '📱');
+        });
+        ev.target.value = '';
+      },
+      clearWallpaper() {
+        this.settings.phoneWallpaper = null;
+        this.toast('已恢复故事封面壁纸', '🖼');
       },
       cycleTheme() { this.settings.theme = this._resolvedTheme === 'dark' ? 'light' : 'dark'; },
       addCustomModel() {
@@ -548,7 +547,8 @@
 
       /* ---------- NPC 管理 ---------- */
       npcTags(n) {
-        return [n.identity, n.personality, n.speech].map(t => t ? String(t).slice(0, 14) : null).filter(Boolean).slice(0, 3);
+        const tags = [n.tier, n.identity, n.personality, n.speech].map(t => t ? String(t).slice(0, 14) : null).filter(Boolean).slice(0, 3);
+        return tags;
       },
       affHeart(v) {
         const a = v == null ? 50 : v;
@@ -1181,6 +1181,11 @@
         if (this.busy && this.streamText) return this.streamNinePart(key);
         return this.lastAi ? this.ninePart(this.lastAi, key) : null;
       },
+      /* 缺段自查：本条回复缺少哪些已启用分区（九段缺一不可） */
+      missingParts(m) {
+        if (!(this.story && this.story.useNineFormat) || !m) return [];
+        return this.layoutSections.filter(s => !this.ninePart(m, s.key));
+      },
       /* 流式：指定 key 的分区 */
       streamNinePart(key) {
         return (this.streamNfParts() || []).find(p => p.key === key) || null;
@@ -1421,7 +1426,13 @@
         return '<div class="card-mind">'
           + lines.map(l => {
             const m = l.match(/^([^：:]{1,12})[：:]\s*(.*)$/);
-            return '<div class="mind-line">' + (m ? '<span class="mind-name">' + this.mdInline(m[1]) + '</span>' : '')
+            let ava = '';
+            if (m) {
+              const src = this.npcAvSrc(m[1]);
+              ava = src ? '<img class="mind-ava" src="' + src + '" alt="">'
+                : '<span class="mind-ava mind-ava-em">' + (this.npcAvEmoji(m[1]) || '💭') + '</span>';
+            }
+            return '<div class="mind-line">' + ava + (m ? '<span class="mind-name">' + this.mdInline(m[1]) + '</span>' : '')
               + '<span class="mind-text">' + this.mdInline(m ? m[2] : l) + '</span></div>';
           }).join('') + '</div>';
       },

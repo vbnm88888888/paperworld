@@ -15,6 +15,8 @@
 /* 桌面图标页：壁纸跟随故事封面色（--acc/--acc2 由 story 封面注入） */
 .p-home { flex: 1; padding: 22px 18px; background: linear-gradient(160deg, color-mix(in srgb, var(--acc) 80%, #10131c), color-mix(in srgb, var(--acc2) 70%, #10131c)); position: relative; overflow: hidden; }
 .p-home::before { content: ''; position: absolute; inset: 0; opacity: .1; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E"); }
+.p-wall-scrim { position: absolute; inset: 0; background: rgba(8, 10, 18, .34); z-index: 0; }
+.p-time, .p-date { position: relative; z-index: 1; }
 [data-theme="dark"] .p-home { background: linear-gradient(160deg, color-mix(in srgb, var(--acc) 55%, #0b0f18), color-mix(in srgb, var(--acc2) 40%, #0b0f18)); }
 .p-home::after { content: ''; position: absolute; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,.08); top: -60px; right: -60px; }
 .p-time { color: #fff; text-align: center; font-size: 44px; font-weight: 200; letter-spacing: 2px; margin: 8px 0 2px; }
