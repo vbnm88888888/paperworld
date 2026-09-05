@@ -154,27 +154,35 @@ html.has-bg .md-doc {
 .rail-tools { display: none; gap: 8px; padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px); border-top: 1px solid var(--line); background: color-mix(in srgb, var(--card2) 55%, transparent); }
 html.has-bg .intel-rail { background: color-mix(in srgb, var(--card) 72%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 
-/* ---------- 九段式分区（剧情流仅正文/心理；卡片感收敛为书卷样式） ---------- */
-.nine-blocks { display: flex; flex-direction: column; gap: 16px; margin: 2px 0 4px; }
+/* ---------- 九段式分区（1-9 游戏化模块：每区专属色/字体/形态） ---------- */
+.nine-blocks { display: flex; flex-direction: column; gap: 18px; margin: 2px 0 4px; }
 .nine-block { border-radius: 0; background: transparent; border: none; box-shadow: none; }
+/* 分区专属色：暗夜宝石色系，深浅主题通用 */
+.nb-time     { --nb-c: #c09a58; }  /* 黄铜 · 时间 */
+.nb-scene    { --nb-c: #6d9bc9; }  /* 黛蓝 · 场景 */
+.nb-map      { --nb-c: #79ab82; }  /* 苔绿 · 地图 */
+.nb-cast     { --nb-c: #c08b55; }  /* 琥珀 · 人员 */
+.nb-story    { --nb-c: var(--gold); }  /* 鎏金 · 正文 */
+.nb-schedule { --nb-c: #a08ecb; }  /* 紫藤 · 日程 */
+.nb-explore  { --nb-c: #58a89d; }  /* 青碧 · 探索 */
+.nb-aside    { --nb-c: #8b97ab; }  /* 青灰 · 旁白 */
+.nb-mind     { --nb-c: #ab8cc9; }  /* 紫水晶 · 心理 */
 .nb-head {
   display: flex; align-items: center; gap: 8px;
   padding: 0 2px 7px; font-weight: 700; font-size: 12.5px;
-  color: var(--gold); letter-spacing: .3em;
+  color: var(--nb-c, var(--gold)); letter-spacing: .3em;
 }
-.nb-head::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 40%, transparent), transparent); }
+.nb-head::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, color-mix(in srgb, var(--nb-c, var(--gold)) 45%, transparent), transparent); }
 .nb-no {
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 18px; height: 18px; padding: 0 3px;
-  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
-  border-radius: 3px; background: transparent;
-  color: var(--gold); font-size: 11px; font-weight: 700; line-height: 1;
+  min-width: 19px; height: 19px; padding: 0 3px;
+  border: 1px solid color-mix(in srgb, var(--nb-c, var(--gold)) 55%, transparent);
+  border-radius: 4px; background: color-mix(in srgb, var(--nb-c, var(--gold)) 12%, transparent);
+  color: var(--nb-c, var(--gold)); font-size: 11.5px; font-weight: 800; line-height: 1;
+  font-family: var(--head-font);
 }
-/* 心理活动：朱砂调、斜体气泡 */
-.nb-mind .nb-head { color: var(--seal); }
-.nb-mind .nb-head::after { background: linear-gradient(90deg, color-mix(in srgb, var(--seal) 40%, transparent), transparent); }
-.nb-mind .nb-no { color: var(--seal); border-color: color-mix(in srgb, var(--seal) 45%, transparent); }
-.nb-mind .say .bubble { font-style: italic; background: color-mix(in srgb, var(--seal) 5%, var(--bubble-npc)); }
+/* 正文（第5区）：书页舞台，稍作强调 */
+.nb-story .nb-head { font-size: 13px; letter-spacing: .34em; }
 .nb-body { padding: 0; }
 .nb-body > .narr:first-child { margin-top: 2px; }
 .nb-md { font-size: var(--plot-font, 17px); line-height: 1.9; color: var(--plot-color, var(--ink)); font-family: var(--plot-family, var(--head-font)); word-break: break-word; white-space: pre-wrap; }
@@ -190,17 +198,67 @@ html.has-bg .intel-rail { background: color-mix(in srgb, var(--card) 72%, transp
 .nb-md .md-line.md-check { color: var(--ok); }
 .nb-md .md-line.md-aff-line, .nb-md li.md-aff-line { color: var(--ink2); font-size: .9em; }
 .nb-md hr { border: none; border-top: 1px dashed var(--line); margin: 12px 0; }
-/* 情报栏里的分区恢复卡片形态 */
-.intel-rail .nine-block {
-  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-  box-shadow: var(--shadow); overflow: hidden;
+
+/* ===== 各分区模块卡（1/2/3/4/6/7/8/9 区的内容形态） ===== */
+.nb-body .card-time, .nb-body .card-scene, .nb-body .card-map, .nb-body .card-cast,
+.nb-body .card-schedule, .nb-body .card-explore, .nb-body .card-aside, .nb-body .card-mind {
+  border-radius: 10px; overflow: hidden;
+  background: color-mix(in srgb, var(--nb-c, var(--gold)) 6%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--nb-c, var(--gold)) 22%, var(--line));
 }
-.intel-rail .nine-block + .nine-block { margin-top: 10px; }
-.intel-rail .nb-head { padding: 8px 12px; letter-spacing: .18em; font-size: 12px; border-bottom: 1px dashed var(--line); }
-.intel-rail .nb-head::after { display: none; }
-.intel-rail .nb-body { padding: 9px 12px; }
-.intel-rail .nb-md { font-size: 13px; line-height: 1.75; white-space: normal; }
-html.has-bg .intel-rail .nine-block { background: color-mix(in srgb, var(--card) 76%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+/* 1 时间：游戏HUD */
+.card-time { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 13px; }
+.card-time .t-ico { width: 15px; height: 15px; color: var(--nb-c); }
+.card-time .t-stamp { font-family: var(--head-font); font-weight: 700; font-style: italic; font-size: 14.5px; letter-spacing: .08em; color: var(--ink); }
+.card-time .t-flow { font-size: 12px; font-weight: 800; color: var(--nb-c); border: 1px solid color-mix(in srgb, var(--nb-c) 40%, transparent); border-radius: 5px; padding: 1px 8px; white-space: nowrap; }
+.card-time .t-reason { font-size: 12px; color: var(--ink3); font-style: italic; }
+/* 2 场景：地点横幅 */
+.card-scene { display: flex; align-items: center; gap: 9px; padding: 11px 13px; background: linear-gradient(90deg, color-mix(in srgb, var(--nb-c) 16%, transparent), color-mix(in srgb, var(--nb-c) 4%, var(--card)) 72%); border-left-width: 3px; }
+.card-scene .s-ico { width: 16px; height: 16px; color: var(--nb-c); flex-shrink: 0; }
+.card-scene .s-text { font-family: var(--head-font); font-weight: 800; font-style: italic; font-size: 15.5px; letter-spacing: .06em; color: var(--ink); }
+/* 3 地图：羊皮纸详图 */
+.card-map .map-title { font-family: var(--head-font); font-weight: 800; font-size: 12.5px; letter-spacing: .22em; color: var(--nb-c); padding: 8px 12px 7px; border-bottom: 1px dashed color-mix(in srgb, var(--nb-c) 30%, var(--line)); }
+.card-map .map-row { border-bottom-color: color-mix(in srgb, var(--nb-c) 12%, var(--line)); }
+.card-map .map-label { color: var(--ink); font-weight: 700; }
+.card-map .map-val { color: var(--ink2); }
+.map-sub { padding: 2px 12px 3px 40px; font-size: 12px; color: var(--ink3); line-height: 1.7; }
+.map-sub::before { content: '— '; opacity: .7; }
+/* 4 人员：名册 */
+.cast-count { display: flex; align-items: baseline; gap: 10px; padding: 9px 12px; font-size: 12.5px; font-weight: 700; color: var(--nb-c); border-bottom: 1px dashed color-mix(in srgb, var(--nb-c) 25%, var(--line)); }
+.cast-count b { font-family: var(--head-font); font-size: 13.5px; letter-spacing: .05em; }
+.cast-left { margin-left: auto; font-size: 11.5px; font-weight: 400; color: var(--ink3); text-align: right; }
+.cast-npc { padding: 8px 12px; border-bottom: 1px dashed color-mix(in srgb, var(--nb-c) 18%, var(--line)); }
+.cast-npc:last-of-type { border-bottom: none; }
+.cast-npc-name { display: block; font-family: var(--head-font); font-weight: 800; color: var(--nb-c); font-size: 13.5px; letter-spacing: .08em; margin-bottom: 2px; }
+.cast-npc-desc { font-size: 12.5px; color: var(--ink2); line-height: 1.8; }
+.cast-aff-title { padding: 8px 12px 2px; font-size: 11.5px; font-weight: 800; color: var(--ink2); letter-spacing: .12em; }
+.card-cast .fmt-aff-row { padding: 5px 12px; margin: 0; }
+/* 6 日程：任务清单 */
+.card-schedule .sch-title { font-family: var(--head-font); font-weight: 800; padding: 9px 12px; font-size: 13.5px; letter-spacing: .05em; color: var(--ink); border-bottom: 1px solid color-mix(in srgb, var(--nb-c) 25%, var(--line)); }
+.card-schedule .sch-sec { margin: 7px; border-radius: 7px; background: color-mix(in srgb, var(--nb-c) 7%, var(--card2)); overflow: hidden; }
+.card-schedule .sch-sec-head { color: var(--nb-c); border-bottom: 1px solid color-mix(in srgb, var(--nb-c) 18%, var(--line)); }
+.card-schedule .sch-item i { font-style: normal; color: var(--nb-c); }
+.sch-box { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-right: 8px; border: 1.5px solid var(--ink3); border-radius: 4px; font-size: 10px; color: #fff; flex-shrink: 0; font-style: normal; }
+.sch-box.on { background: var(--nb-c); border-color: var(--nb-c); }
+.sch-todo .sch-box { border-color: var(--nb-c); }
+/* 7 探索：解锁横幅 + 足迹 */
+.ex-unlock { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-size: 12.5px; color: var(--ink2); background: color-mix(in srgb, var(--nb-c) 13%, transparent); border-bottom: 1px dashed color-mix(in srgb, var(--nb-c) 25%, var(--line)); }
+.ex-unlock .ico { width: 15px; height: 15px; color: var(--nb-c); flex-shrink: 0; }
+.ex-unlock b { font-family: var(--head-font); font-size: 14px; color: var(--nb-c); letter-spacing: .05em; }
+.ex-rec-title { padding: 8px 12px 2px; font-size: 11.5px; font-weight: 800; color: var(--ink2); letter-spacing: .18em; }
+.ex-row i { font-style: normal; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-right: 7px; border-radius: 50%; font-size: 9px; font-weight: 800; color: #fff; }
+.ex-ok i { background: var(--ok); }
+.ex-q i { background: var(--ink3); }
+/* 8 旁白：系统播报 */
+.card-aside { border-style: dashed !important; background: color-mix(in srgb, var(--nb-c) 4%, transparent) !important; }
+.aside-row { border-bottom-color: color-mix(in srgb, var(--nb-c) 15%, var(--line)); }
+.aside-row:last-child { border-bottom: none; }
+.aside-label { color: var(--nb-c); letter-spacing: .1em; font-family: var(--head-font); }
+/* 9 心理：内心独白卡 */
+.card-mind { background: color-mix(in srgb, var(--nb-c) 9%, var(--card)) !important; border-color: color-mix(in srgb, var(--nb-c) 28%, var(--line)) !important; }
+.card-mind .mind-line { font-style: italic; border-bottom: none; }
+.card-mind .mind-name { color: var(--nb-c); }
+.card-mind .mind-text { color: var(--ink2); }
 
 /* 流式中正文还没归位时的占位（避免空白） */
 .beat-loading {
@@ -349,40 +407,38 @@ html.has-bg .intel-rail .nine-block { background: color-mix(in srgb, var(--card)
   .plot-tools { display: flex; }
 }
 
-/* ---------- 分区固定格式渲染（情报栏内） ---------- */
-.card-map, .card-cast, .card-schedule, .card-explore, .card-aside, .card-mind {
-  overflow: hidden; border-radius: 8px;
+/* ---------- 情报栏内的分区卡形态（横屏右栏：紧凑卡片） ---------- */
+.intel-rail .nine-block {
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow); overflow: hidden;
 }
-/* 地图 */
-.map-row { display: flex; align-items: flex-start; gap: 8px; padding: 7px 11px; border-bottom: 1px solid var(--line); font-size: 13px; line-height: 1.6; }
-.map-row:last-child { border-bottom: none; }
+.intel-rail .nine-block + .nine-block { margin-top: 10px; }
+.intel-rail .nb-head { padding: 8px 12px; letter-spacing: .18em; font-size: 12px; border-bottom: 1px dashed var(--line); }
+.intel-rail .nb-head::after { display: none; }
+.intel-rail .nb-body { padding: 9px 12px; }
+.intel-rail .nb-body .card-time, .intel-rail .nb-body .card-scene, .intel-rail .nb-body .card-map,
+.intel-rail .nb-body .card-cast, .intel-rail .nb-body .card-schedule, .intel-rail .nb-body .card-explore,
+.intel-rail .nb-body .card-aside, .intel-rail .nb-body .card-mind {
+  background: transparent; border: none; border-radius: 0; padding: 0;
+}
+.intel-rail .nb-md { font-size: 13px; line-height: 1.75; white-space: normal; }
+.intel-rail .card-time .t-stamp { font-size: 13px; }
+.intel-rail .card-scene .s-text { font-size: 13.5px; }
+html.has-bg .intel-rail .nine-block { background: color-mix(in srgb, var(--card) 76%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+
+/* ---------- 固定格式基础布局（宽度/行高，主题着色见九段式模块卡） ---------- */
+.map-row { display: flex; align-items: flex-start; gap: 8px; padding: 7px 12px; font-size: 13px; line-height: 1.6; }
 .map-emoji { flex: 0 0 20px; font-size: 13px; }
-.map-label { flex: 0 0 auto; font-weight: 700; color: var(--ink2); margin-right: 2px; }
-.map-val { color: var(--ink); }
-/* 人员 */
-.cast-count { padding: 8px 11px; font-size: 12px; font-weight: 700; color: var(--gold); border-bottom: 1px solid var(--line); }
-.cast-desc { padding: 7px 11px; font-size: 12.5px; color: var(--ink2); line-height: 1.7; border-bottom: 1px solid var(--line); }
-.cast-aff-title { padding: 8px 11px 2px; font-size: 11.5px; font-weight: 800; color: var(--ink2); letter-spacing: .1em; }
-.card-cast .fmt-aff-row { padding: 5px 11px; margin: 0; }
-/* 日程 */
-.sch-sec { margin: 7px; border-radius: 7px; background: var(--card2); overflow: hidden; }
-.sch-sec-head { padding: 6px 10px; font-size: 12px; font-weight: 800; color: var(--ink); border-bottom: 1px solid var(--line); }
-.sch-item { padding: 5px 10px; font-size: 12.5px; color: var(--ink); line-height: 1.6; display: flex; gap: 6px; align-items: flex-start; }
-.sch-item i { font-style: normal; color: var(--ok); font-weight: 700; }
-.sch-done { color: var(--ink3); text-decoration: line-through; }
-.sch-todo i { color: var(--acc); }
-/* 探索 */
-.ex-row { padding: 6px 11px; font-size: 13px; line-height: 1.6; }
-.ex-ok { color: var(--ok); }
-.ex-q { color: var(--warn); }
-.ex-info { color: var(--acc); font-weight: 700; }
-/* 旁白 */
-.aside-row { padding: 7px 11px; font-size: 12.5px; color: var(--ink2); line-height: 1.7; border-bottom: 1px solid var(--line); display: flex; gap: 8px; align-items: flex-start; }
-.aside-row:last-child { border-bottom: none; }
-.aside-label { flex: 0 0 56px; font-weight: 800; color: var(--ink); }
-/* 心理 */
-.mind-line { padding: 5px 11px; font-size: 13px; color: var(--ink2); line-height: 1.7; font-style: italic; }
-.mind-name { font-weight: 800; color: var(--seal); margin-right: 4px; font-style: normal; }
+.map-label { flex: 0 0 auto; }
+.map-val { flex: 1; min-width: 0; }
+.sch-item { display: flex; gap: 6px; align-items: flex-start; padding: 5px 10px; font-size: 12.5px; color: var(--ink); line-height: 1.6; }
+.sch-item .sch-text { flex: 1; min-width: 0; word-break: break-word; }
+.sch-done .sch-text { color: var(--ink3); text-decoration: line-through; }
+.ex-row { padding: 6px 12px; font-size: 13px; line-height: 1.6; display: flex; align-items: baseline; }
+.aside-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; font-size: 12.5px; color: var(--ink2); line-height: 1.75; border-bottom: 1px solid var(--line); }
+.aside-label { flex: 0 0 62px; font-weight: 800; }
+.mind-line { padding: 5px 12px; font-size: 13.5px; line-height: 1.8; }
+.mind-name { font-weight: 800; margin-right: 6px; }
 
 /* ---------- 结构化格式卡片（旧经典模式兼容） ---------- */
 .fmt-time, .fmt-scene {

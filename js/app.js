@@ -141,15 +141,25 @@
         const keys = ['time', 'scene', 'map', 'cast', 'schedule', 'explore', 'aside'];
         return this.layoutSections.filter(s => keys.indexOf(s.key) >= 0 && this.railPartOf(s.key));
       },
-      /* 竖屏状态条：时间 + 场景（流式时实时跟随） */
+      /* 竖屏状态条：时间 + 场景（流式时实时跟随，兼容粗斜体/引用块装饰） */
       stripParts() {
         if (!(this.story && this.story.useNineFormat)) return [];
         const out = [];
         ['time', 'scene'].forEach(k => {
           const p = this.railPartOf(k);
           if (!p) return;
-          let t = String(p.md || '').split('\n')[0].replace(/[\[\]【】]/g, '').trim();
-          if (k === 'time') t = t.split('｜')[0].split('|')[0].trim();
+          let t = '';
+          this.plainLines(p.md).some(l => {
+            if (!l) return false;
+            const c = l.replace(/[【】\[\]]/g, '').trim();
+            if (k === 'time') {
+              const main = c.split(/时间流逝/)[0].replace(/[\s*_（(]+$/, '').trim();
+              if (/\d{1,2}\s*月/.test(main)) { t = main; return true; }
+              return false;
+            }
+            if (c && !/时间流逝|理由/.test(c)) { t = c; return true; }
+            return false;
+          });
           if (t) out.push({ key: k, text: t });
         });
         return out;
@@ -1009,7 +1019,9 @@
         for (const raw of clean.split('\n')) {
           // 支持独立行标题与行内标题（含序号前缀，如 "2.【当前场景】..." / "**【时间】**..."）
           const h = raw.trim().match(/^(?:\d+\s*[.、．]\s*)?\*?_?\*?\s*【([^】]+)】\s*\*?_?\*?\s*(.*)$/);
-          if (h) {
+          /* 分区内部的小标题（如【可攻略NPC好感度进度】）不是分区头，按内容处理 */
+          const SUB_HEADS = /^(可攻略NPC好感度进度|当前区域环境详图|已探索区域记录|情报更新|当前游戏状态)$/;
+          if (h && !SUB_HEADS.test(h[1].trim())) {
             const title = h[1].trim();
             const key = this.partKeyOfTitle(title) || 'story'; // 未知标题回落到正文，避免内容丢失
             flush();
@@ -1035,11 +1047,15 @@
         const isMarkerLine = (ln) => {
           const t = ln.trim();
           if (!t) return true;
-          if (/^[\[【［｛{]/.test(t)) return true;                       // [标记] 【标记】行
-          if (/^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u.test(t)) return true; // emoji标记行（🌟🏛✅等）
+          if (/^\*{0,3}\s*[\[【［｛{]/.test(t)) return true;              // [标记] / ***[标记]*** 行
+          if (/^>\s*\*{0,3}\s*[\[【［]/.test(t)) return true;             // > 【标记】 引用块标记行
+          if (/^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/u.test(t)) return true; // emoji标记行（🌟🏛✅🔹等）
           /* 短标签行（如 "轮次：2"）：冒号后紧跟引号的是对话（沈砚：「早。」），必须保留为正文 */
-          const m = t.match(/^([^：:]{1,8})[：:](.*)$/);
-          if (m && !/^[「“'"『]/.test(m[2]) && m[2].length <= 12 && !/[。，！？]/.test(m[2])) return true;
+          const m = t.match(/^([^：:]{1,12})[：:](.*)$/);
+          if (m) {
+            if (!/^[「“'"『]/.test(m[2]) && m[2].length <= 12 && !/[。，！？]/.test(m[2])) return true;
+            if (m[2].length >= 20) return true;   // 结构化长字段（如 NPC姓名：50字外貌描写）按标记保留在原分区
+          }
           return false;
         };
         const extractProse = (md) => {
@@ -1188,6 +1204,8 @@
       /* 分区渲染分发：未知/旧数据回落 mdDoc */
       renderPartHTML(p) {
         switch (p.key) {
+          case 'time': return this.renderTimePart(p);
+          case 'scene': return this.renderScenePart(p);
           case 'map': return this.renderMapPart(p);
           case 'cast': return this.renderCastPart(p);
           case 'schedule': return this.renderSchedulePart(p);
@@ -1197,46 +1215,114 @@
           default: return this.mdDoc(p.md);
         }
       },
-      /* 地图卡：emoji 行头逐行渲染（代码固定格式） */
+      /* 去掉引用块/粗斜体/加粗装饰，得到纯文本行（新旧格式通用） */
+      plainLines(md) {
+        return String(md || '').split('\n').map(l => l
+          .replace(/^\s*>\s?/, '')
+          .replace(/\*\*/g, '')
+          .replace(/^\s*[*_]+\s*/, '')
+          .replace(/[*_]+\s*$/, '')
+          .trim());
+      },
+      /* 时间HUD：***[X月X日 星期X HH:MM:SS]*** + 时间流逝 + 理由（可同 行/多行） */
+      renderTimePart(p) {
+        let stamp = '', flow = '', reason = '';
+        this.plainLines(p.md).forEach(l => {
+          if (!l) return;
+          const t = l.replace(/[【】\[\]]/g, '').trim();
+          const main = t.split(/时间流逝/)[0].replace(/[\s*_（(]+$/, '').trim();
+          if (!stamp && /\d{1,2}\s*月/.test(main)) stamp = main;
+          const fm = l.match(/时间流逝[：:]\s*\(?【?([^】|｜\]]+)/);
+          if (fm && !flow) flow = fm[1].trim();
+          const rm = l.match(/理由[：:]\s*([^）)]*)/);
+          if (rm && !reason) reason = rm[1].trim();
+        });
+        if (!stamp && !flow) return this.mdDoc(p.md);
+        return '<div class="card-time">'
+          + '<svg class="ico t-ico" viewBox="0 0 24 24"><use href="#i-clock"/></svg>'
+          + (stamp ? '<span class="t-stamp">' + this.mdInline(stamp) + '</span>' : '')
+          + (flow ? '<span class="t-flow">' + this.mdInline(flow) + '</span>' : '')
+          + (reason ? '<span class="t-reason">' + this.mdInline(reason) + '</span>' : '')
+          + '</div>';
+      },
+      /* 场景横幅：***[地点·具体位置]*** */
+      renderScenePart(p) {
+        let scene = '';
+        this.plainLines(p.md).some(l => {
+          if (!l) return false;
+          const t = l.replace(/[【】\[\]]/g, '').trim();
+          if (t && !/时间流逝|理由/.test(t) && t.length <= 40) { scene = t; return true; }
+          return false;
+        });
+        if (!scene) return this.mdDoc(p.md);
+        return '<div class="card-scene">'
+          + '<svg class="ico s-ico" viewBox="0 0 24 24"><use href="#i-pin"/></svg>'
+          + '<span class="s-text">' + this.mdInline(scene) + '</span></div>';
+      },
+      /* 地图卡：引用块 🌟/🏛️/🛍️/🌳/👥/🔍 类目行 + 「- 」子条目（兼容旧纯文本格式） */
       renderMapPart(p) {
         const rows = [];
-        (String(p.md || '').split('\n')).forEach(l => {
-          const m = l.trim().match(/^(🌟|🏛️|🛍️|🌳|👥|🔍)\s*(.*)$/);
-          if (m) rows.push({ e: m[1], body: m[2] });
+        let title = '';
+        this.plainLines(p.md).forEach(l => {
+          if (!l) return;
+          const tm = l.match(/【(.+?)】/);
+          if (tm && !title && !rows.length) { title = tm[1]; return; }
+          const em = l.match(/^(🌟|🏛️|🛍️|🌳|👥|🔍)\s*(.*)$/);
+          if (em) {
+            const body = em[2];
+            const sep = body.indexOf('：') >= 0 ? body.indexOf('：') : body.indexOf(':');
+            const label = sep > 0 ? body.slice(0, sep) : '';
+            const val = sep > 0 ? body.slice(sep + 1) : body;
+            rows.push({ e: em[1], label, val, subs: [] });
+            return;
+          }
+          const sub = l.match(/^[-·•]\s*(.+)$/);
+          if (sub && rows.length) rows[rows.length - 1].subs.push(sub[1]);
         });
-        if (rows.length < 2) return this.mdDoc(p.md);
-        const rowsHtml = rows.map(r => {
-          const sep = r.body.indexOf('：');
-          const label = sep > 0 ? r.body.slice(0, sep + 1) : '';
-          const val = sep > 0 ? r.body.slice(sep + 1) : r.body;
-          return '<div class="map-row"><span class="map-emoji">' + r.e + '</span>'
-            + (label ? '<span class="map-label">' + this.mdInline(label) + '</span>' : '')
-            + '<span class="map-val">' + this.mdInline(val) + '</span></div>';
-        }).join('');
-        return '<div class="card-map">' + rowsHtml + '</div>';
+        if (!rows.length) return this.mdDoc(p.md);
+        let html = '<div class="card-map">' + (title ? '<div class="map-title">' + this.mdInline(title) + '</div>' : '');
+        rows.forEach(r => {
+          html += '<div class="map-row"><span class="map-emoji">' + r.e + '</span>'
+            + (r.label ? '<span class="map-label">' + this.mdInline(r.label) + '：</span>' : '')
+            + '<span class="map-val">' + this.mdInline(r.val) + '</span></div>';
+          r.subs.forEach(s => { html += '<div class="map-sub">' + this.mdInline(s) + '</div>'; });
+        });
+        return html + '</div>';
       },
-      /* 人员卡：人数行 + 外貌描写 + 🔹 好感度进度条 */
+      /* 人员卡：在场/离场人数 + NPC姓名：外貌描写 + 【可攻略NPC好感度进度】🔹 行 */
       renderCastPart(p) {
-        const md = String(p.md || '');
-        const affRe = /🔹\s*([^：:|\s]{1,16})[：:]\s*好感度\s*(-?\d+)\s*%?(?:\s*[\|｜]\s*状态[：:]\s*([^|\n]*))?(?:\s*[\|｜]\s*备注[：:]\s*([^\n]*))?/;
+        const lines = this.plainLines(p.md);
+        let present = '', left = '';
+        const npcs = [];
         const affs = [];
-        const descs = [];
-        let count = '';
-        md.split('\n').forEach(l => {
-          const t = l.trim();
-          if (!t) return;
-          const cm = t.match(/\[(目前在场角色人数[^\]]*)\]/);
-          if (cm) { count = cm[1]; return; }
-          const am = t.match(affRe);
+        let affHeadSeen = false;
+        lines.forEach(l => {
+          if (!l) return;
+          const cm = l.match(/目前在场角色人数[：:]\s*([\d\+\-]+\s*人?)/);
+          if (cm) {
+            present = cm[1].trim();
+            const lm = l.match(/离场人数[：:]\s*([^\]]*)/);
+            if (lm) left = lm[1].trim().replace(/[（）()]\s*$/, '');
+            return;
+          }
+          if (/可攻略NPC好感度进度/.test(l)) { affHeadSeen = true; return; }
+          const am = l.match(/🔹\s*([^：:|\s]{1,16})[：:]\s*好感度\s*(-?\d+)\s*%?(?:\s*[|｜]\s*状态[：:]\s*([^|\n]*))?(?:\s*[|｜]\s*备注[：:]\s*([^\n]*))?/);
           if (am) { affs.push({ name: am[1], v: parseInt(am[2], 10) || 0, state: (am[3] || '').trim(), note: (am[4] || '').trim() }); return; }
-          descs.push(t);
+          if (affHeadSeen) return;
+          const nm = l.match(/^([^：:🔹\[\]【]{1,12})[：:]\s*(.+)$/);
+          if (nm) { npcs.push({ name: nm[1].trim(), text: nm[2].trim() }); return; }
+          npcs.push({ name: '', text: l });
         });
-        if (!affs.length && !count) return this.mdDoc(md);
+        if (!present && !npcs.length && !affs.length) return this.mdDoc(p.md);
         let html = '<div class="card-cast">';
-        if (count) html += '<div class="cast-count">' + this.mdInline(count) + '</div>';
-        descs.forEach(d => { html += '<div class="cast-desc">' + this.mdInline(d) + '</div>'; });
+        if (present || left) html += '<div class="cast-count"><b>在场 ' + this.mdInline(present || '?') + '</b>'
+          + (left ? '<span class="cast-left">离场 ' + this.mdInline(left) + '</span>' : '') + '</div>';
+        npcs.forEach(n => {
+          html += '<div class="cast-npc">' + (n.name ? '<b class="cast-npc-name">' + this.mdInline(n.name) + '</b>' : '')
+            + '<span class="cast-npc-desc">' + this.mdInline(n.text) + '</span></div>';
+        });
         if (affs.length) {
-          html += '<div class="cast-aff-title">好感度进度</div>';
+          html += '<div class="cast-aff-title">可攻略NPC好感度进度</div>';
           affs.forEach(a => {
             html += '<div class="fmt-aff-row"><span class="fan">' + this.mdInline(a.name) + '</span>'
               + '<div class="abar"><i style="' + this.affBarStyleStr(a.v) + '"></i><span class="zero"></span></div>'
@@ -1246,72 +1332,97 @@
         }
         return html + '</div>';
       },
-      /* 日程卡：📅/⏰/💡/🌍 分组 + [ ]/✅ 复选框（代码固定格式） */
+      /* 日程卡：引用块 📅标题 + ⏰/💡/🌍 分组 + [ ]/✅ 复选框（兼容旧纯文本格式） */
       renderSchedulePart(p) {
-        const md = String(p.md || '');
-        const heads = { '📅': '日程', '⏰': '固定日程', '💡': '待办与机会', '🌍': '世界动态' };
-        const lines = md.split('\n');
-        if (!lines.some(l => /^(📅|⏰|💡|🌍)/.test(l.trim()))) return this.mdDoc(md);
+        const lines = this.plainLines(p.md);
+        const heads = { '⏰': '固定日程', '💡': '待办与机会', '🌍': '世界动态' };
+        let title = '';
         const secs = [];
         let cur = null;
+        let saw = false;
         lines.forEach(l => {
-          const t = l.trim();
-          if (!t) return;
-          const hm = t.match(/^(📅|⏰|💡|🌍)\s*(.*)$/);
-          if (hm) { cur = { ico: hm[1], title: heads[hm[1]] || hm[1], rows: [] }; secs.push(cur); if (hm[2]) cur.rows.push({ text: hm[2], done: null }); return; }
+          if (!l) return;
+          if (/^[-—_]{5,}$/.test(l)) { saw = true; return; }
+          if (!title && /^📅/.test(l)) { title = l.replace(/^📅\s*/, ''); saw = true; return; }
+          const hm = l.match(/^(⏰|💡|🌍)\s*(.*)$/);
+          if (hm) {
+            cur = { ico: hm[1], title: heads[hm[1]], rows: [] };
+            secs.push(cur); saw = true;
+            const rest = hm[2].replace(/^[：:]\s*/, '').replace(/（[^）]*）\s*$/, '').trim();
+            if (rest && rest !== heads[hm[1]]) cur.rows.push({ text: rest, done: null });
+            return;
+          }
           if (!cur) return;
-          const done = /^✅/.test(t) ? true : (/^\[\s*\]/.test(t) ? false : null);
-          const clean = t.replace(/^(✅|\[\s*\])\s*/, '');
-          cur.rows.push({ text: clean, done });
+          let t = l.replace(/^>\s*/, ''), done = null;
+          const bm = t.match(/^\[\s*([x✓✅]?)\s*\]\s*/i);
+          if (bm) { done = !!bm[1]; t = t.slice(bm[0].length); }
+          else if (/^✅/.test(t)) { done = true; t = t.replace(/^✅\s*/, ''); }
+          t = t.trim();
+          if (t) { cur.rows.push({ text: t, done }); saw = true; }
         });
-        let html = '<div class="card-schedule">';
+        if (!saw || (!secs.length && !title)) return this.mdDoc(p.md);
+        let html = '<div class="card-schedule">' + (title ? '<div class="sch-title">' + this.mdInline(title) + '</div>' : '');
         secs.forEach(s => {
           html += '<div class="sch-sec"><div class="sch-sec-head">' + s.ico + ' ' + this.mdInline(s.title) + '</div>';
           s.rows.forEach(r => {
+            const isDyn = /^[·•]/.test(r.text);
+            const text = r.text.replace(/^[·•]\s*/, '');
             const cls = r.done === true ? 'sch-item sch-done' : (r.done === false ? 'sch-item sch-todo' : 'sch-item');
-            const mark = r.done === true ? '☑' : (r.done === false ? '☐' : '');
-            html += '<div class="' + cls + '">' + (mark ? '<i>' + mark + '</i>' : '') + this.mdInline(r.text) + '</div>';
+            const box = r.done === null ? '' : '<i class="sch-box' + (r.done ? ' on' : '') + '">' + (r.done ? '✓' : '') + '</i>';
+            html += '<div class="' + cls + '">' + box + '<span class="sch-text">' + this.mdInline(text) + '</span></div>';
           });
           html += '</div>';
         });
         return html + '</div>';
       },
-      /* 探索卡：✅/❓/🎉 状态行 */
+      /* 探索卡：🎉 解锁横幅 + 已探索区域记录（✅/❓） */
       renderExplorePart(p) {
+        const lines = this.plainLines(p.md);
+        let unlock = '';
         const rows = [];
-        (String(p.md || '').split('\n')).forEach(l => {
-          const t = l.trim();
-          if (!t) return;
-          const info = t.match(/^情报更新[：:]\s*(.*)$/);
-          if (info) { rows.push({ cls: 'ex-info', text: '🎉 ' + info[1] }); return; }
-          const m = t.match(/^(✅|❓|🎉)\s*(.*)$/);
-          if (m) { rows.push({ cls: m[1] === '✅' ? 'ex-ok' : (m[1] === '❓' ? 'ex-q' : 'ex-info'), text: m[1] + ' ' + m[2] }); }
+        lines.forEach(l => {
+          if (!l) return;
+          const um = l.match(/已解锁新区域\s*[-－：:]?\s*[`「【\[]?([^`」】\]]+)/);
+          if (um) { unlock = um[1].trim(); return; }
+          if (/已探索区域记录|探索记录/.test(l)) return;
+          const m = l.match(/^(✅|❓)\s*(.*)$/);
+          if (m) { rows.push({ ok: m[1] === '✅', text: m[2] }); return; }
+          const m2 = l.match(/^[❶❷❸❹❺①②③④⑤]\s*(.*)$/);
+          if (m2) rows.push({ ok: false, text: m2[1] });
         });
-        if (!rows.length) return this.mdDoc(p.md);
-        return '<div class="card-explore">'
-          + rows.map(r => '<div class="ex-row ' + r.cls + '">' + this.mdInline(r.text) + '</div>').join('') + '</div>';
+        if (!unlock && !rows.length) return this.mdDoc(p.md);
+        let html = '<div class="card-explore">';
+        if (unlock) html += '<div class="ex-unlock"><svg class="ico" viewBox="0 0 24 24"><use href="#i-spark"/></svg><span>解锁新区域</span><b>' + this.mdInline(unlock) + '</b></div>';
+        if (rows.length) html += '<div class="ex-rec-title">已探索区域记录</div>'
+          + rows.map(r => '<div class="ex-row ' + (r.ok ? 'ex-ok' : 'ex-q') + '"><i>' + (r.ok ? '✓' : '?') + '</i>' + this.mdInline(r.text) + '</div>').join('');
+        return html + '</div>';
       },
-      /* 旁白卡：标签：内容 三行 */
+      /* 旁白卡：情节回溯/任务提示/系统自检 三行（兼容加粗/列表前缀） */
       renderAsidePart(p) {
         const rows = [];
-        (String(p.md || '').split('\n')).forEach(l => {
-          const m = l.trim().match(/^(情节回溯|任务提示|系统自检)[：:]\s*(.*)$/);
+        this.plainLines(p.md).forEach(l => {
+          if (!l) return;
+          const m = l.match(/^(情节回溯|任务提示|系统自检)[：:]\s*(.*)$/);
           if (m) rows.push({ label: m[1], body: m[2] });
+          else if (rows.length) rows[rows.length - 1].body += ' ' + l;
         });
         if (!rows.length) return this.mdDoc(p.md);
         return '<div class="card-aside">'
           + rows.map(r => '<div class="aside-row"><b class="aside-label">' + this.mdInline(r.label) + '</b><span>' + this.mdInline(r.body) + '</span></div>').join('') + '</div>';
       },
-      /* 心理卡：角色名：内容 逐行 */
+      /* 心理卡：```text 代码块内 角色名：内容 逐行（兼容旧格式） */
       renderMindPart(p) {
-        const md = String(p.md || '');
-        if (/\*\*|^\s*>/.test(md)) return this.mdDoc(md);   // 旧格式带markdown → 回落
+        let md = String(p.md || '');
+        const cb = md.match(/```[a-zA-Z]*\s*\n([\s\S]*?)(?:```|$)/);
+        if (cb) md = cb[1];
+        md = md.replace(/```[a-zA-Z]*\n?/g, '');
         const lines = md.split('\n').map(l => l.trim()).filter(Boolean);
-        if (!lines.length) return this.mdDoc(md);
+        if (!lines.length) return this.mdDoc(p.md);
         return '<div class="card-mind">'
           + lines.map(l => {
             const m = l.match(/^([^：:]{1,12})[：:]\s*(.*)$/);
-            return '<div class="mind-line">' + (m ? '<span class="mind-name">' + this.mdInline(m[1]) + '</span>' : '') + this.mdInline(m ? m[2] : l) + '</div>';
+            return '<div class="mind-line">' + (m ? '<span class="mind-name">' + this.mdInline(m[1]) + '</span>' : '')
+              + '<span class="mind-text">' + this.mdInline(m ? m[2] : l) + '</span></div>';
           }).join('') + '</div>';
       },
       /* 从最新一条AI消息回写游戏状态机（解析新版纯文本标记：[时间]/[场景]/第X天/✅探索） */
