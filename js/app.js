@@ -102,7 +102,11 @@
         affFxList: [],
 
         /* 娱乐圈演出层 */
-        entFx: null            // 晋升庆典全屏特效 {name, tier, key}
+        entFx: null,           // 晋升庆典全屏特效 {name, tier, key}
+
+        /* PWA 安装引导 */
+        installEvt: null,      // beforeinstallprompt 暂存（安卓Chrome）
+        installHintShow: true
       };
     },
 
@@ -168,6 +172,11 @@
         }));
       },
       achEarnedCount() { return this.achList.filter(a => a.earned).length; },
+      /* iOS 判定（Safari 没有一键安装，只能引导分享菜单） */
+      iosLike() {
+        return /iphone|ipad|ipod/i.test(navigator.userAgent)
+          || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      },
       /* 手机桌面壁纸（自定义 > 故事封面渐变兜底） */
       phoneWallOn() { return !!(this.settings.phoneWallpaper && this.settings.phoneWallpaper.img); },
       phoneWallStyle() {
@@ -262,6 +271,9 @@
     mounted() {
       PW.App = this;
       if (!this.settings.guideSeen) { this.guide.open = true; }
+      /* PWA：暂存浏览器安装事件，供「一键安装」按钮使用 */
+      window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); this.installEvt = e; });
+      window.addEventListener('appinstalled', () => { this.installEvt = null; this.installHintShow = false; this.toast('已安装到桌面', '📱'); });
     },
 
     methods: {
@@ -332,6 +344,13 @@
       clearWallpaper() {
         this.settings.phoneWallpaper = null;
         this.toast('已恢复故事封面壁纸', '🖼');
+      },
+      /* PWA 安装 */
+      doInstall() {
+        const e = this.installEvt;
+        if (!e) return;
+        e.prompt();
+        e.userChoice.then(() => { this.installEvt = null; this.installHintShow = false; }).catch(() => {});
       },
 
       /* ---------- 成就（跨模式收集） ---------- */
@@ -560,6 +579,7 @@
 
       /* ---------- 书架 ---------- */
       genreName(st) {
+        if (st.settings && st.settings.entMode) return '娱乐圈 · 资本帝国';
         const t = PW.TEMPLATES[st.genreKey];
         return t ? t.name : '自由自定';
       },
