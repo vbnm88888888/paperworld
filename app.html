@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260906-e';</script>
-  <!-- build 20260906-e · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
+  <script>window.__HTML_BUILD__='20260906-f';</script>
+  <!-- build 20260906-f · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
   <meta http-equiv="Cache-Control" content="no-store">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0e1320">
@@ -12,13 +12,13 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon.svg">
-  <link rel="stylesheet" href="css/base.css?v=21">
-  <link rel="stylesheet" href="css/shelf.css?v=21">
-  <link rel="stylesheet" href="css/story.css?v=21">
-  <link rel="stylesheet" href="css/npc.css?v=21">
-  <link rel="stylesheet" href="css/editor.css?v=21">
-  <link rel="stylesheet" href="css/phone.css?v=21">
-  <script src="js/vendor/vue.global.prod.js?v=21"></script>
+  <link rel="stylesheet" href="css/base.css?v=22">
+  <link rel="stylesheet" href="css/shelf.css?v=22">
+  <link rel="stylesheet" href="css/story.css?v=22">
+  <link rel="stylesheet" href="css/npc.css?v=22">
+  <link rel="stylesheet" href="css/editor.css?v=22">
+  <link rel="stylesheet" href="css/phone.css?v=22">
+  <script src="js/vendor/vue.global.prod.js?v=22"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -92,23 +92,6 @@
     </div>
 
     <button class="fab" @click="newWizard" title="新建故事"><svg class="ico" style="width:26px;height:26px"><use href="#i-plus"/></svg></button>
-
-    <!-- PWA 安装引导 -->
-    <div class="install-hint" v-if="installHintShow">
-      <button class="ih-close" @click="installHintShow=false"><svg class="ico"><use href="#i-x"/></svg></button>
-      <template v-if="installEvt">
-        <div class="ih-body"><b>📱 安装纸上人间</b><span>像 APP 一样从桌面打开</span></div>
-        <button class="ih-btn" @click="doInstall">一键安装</button>
-      </template>
-      <template v-else>
-        <div class="ih-body">
-          <b>📱 安装成 APP</b>
-          <span>{{ iosLike
-            ? 'iPhone：点 Safari 底部分享按钮（□↑）→ 选「添加到主屏幕」'
-            : '安卓：浏览器右上角 ⋮ → 「安装应用 / 添加到主屏幕」；iPhone：Safari 分享按钮 → 添加到主屏幕。需 HTTPS 网址（GitHub Pages 可直接装）' }}</span>
-        </div>
-      </template>
-    </div>
   </div>
 
   <!-- ==================== 故事页 ==================== -->
@@ -1340,16 +1323,16 @@
   </div>
 </div>
 
-<script src="js/config.js?v=21"></script>
-<script src="js/templates.js?v=21"></script>
-<script src="js/store.js?v=21"></script>
-<script src="js/api.js?v=21"></script>
-<script src="js/rag.js?v=21"></script>
-<script src="js/prompts.js?v=21"></script>
-<script src="js/avatars.js?v=21"></script>
-<script src="js/affinity.js?v=21"></script>
-<script src="js/randomnpc.js?v=21"></script>
-<script src="js/phone.js?v=21"></script>
-<script src="js/app.js?v=21"></script>
+<script src="js/config.js?v=22"></script>
+<script src="js/templates.js?v=22"></script>
+<script src="js/store.js?v=22"></script>
+<script src="js/api.js?v=22"></script>
+<script src="js/rag.js?v=22"></script>
+<script src="js/prompts.js?v=22"></script>
+<script src="js/avatars.js?v=22"></script>
+<script src="js/affinity.js?v=22"></script>
+<script src="js/randomnpc.js?v=22"></script>
+<script src="js/phone.js?v=22"></script>
+<script src="js/app.js?v=22"></script>
 </body>
 </html>
