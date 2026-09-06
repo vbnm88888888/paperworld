@@ -59,7 +59,8 @@ html.has-bg .md-doc {
 
 /* ---------- 对话气泡：立绘式（大头像 + 名字在头像下方，galgame舞台位） ---------- */
 @keyframes avPop { 0% { transform: scale(.4) translateY(5px); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
-.msg .say { position: relative; display: block; padding-left: 68px; min-height: 82px; margin-top: 16px; }
+@keyframes sayPop { 0% { transform: translateY(14px) scale(.96); opacity: 0; } 55% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+.msg .say { position: relative; display: block; padding-left: 68px; min-height: 82px; margin-top: 16px; animation: sayPop .42s cubic-bezier(.2, 1.2, .4, 1) both; }
 .msg .say .avatar {
   position: absolute; left: 0; top: 0; width: 56px; height: 56px; border-radius: 14px; font-size: 26px;
   box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent);
