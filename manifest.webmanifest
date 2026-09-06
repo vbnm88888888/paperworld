@@ -1,0 +1,15 @@
+{
+  "name": "纸上人间 · AI 文字模拟游戏",
+  "short_name": "纸上人间",
+  "description": "双模式 AI 互动小说：自由自定 + 娱乐圈·资本帝国",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0e1320",
+  "theme_color": "#0e1320",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

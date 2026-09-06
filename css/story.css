@@ -235,11 +235,10 @@ html.has-bg .intel-rail { background: color-mix(in srgb, var(--card) 72%, transp
 .aside-row { border-bottom-color: color-mix(in srgb, var(--nb-c) 15%, var(--line)); }
 .aside-row:last-child { border-bottom: none; }
 .aside-label { color: var(--nb-c); letter-spacing: .1em; font-family: var(--head-font); }
-/* 9 心理：内心独白卡 */
+/* 9 心理：内心独白卡（按角色分组：头像+名字一行，内容整齐左对齐） */
 .card-mind { background: color-mix(in srgb, var(--nb-c) 9%, var(--card)) !important; border-color: color-mix(in srgb, var(--nb-c) 28%, var(--line)) !important; }
-.card-mind .mind-line { font-style: italic; border-bottom: none; }
+.card-mind .mind-body { font-style: italic; }
 .card-mind .mind-name { color: var(--nb-c); }
-.card-mind .mind-text { color: var(--ink2); }
 
 /* 流式中正文还没归位时的占位（避免空白） */
 .beat-loading {
@@ -426,11 +425,14 @@ html.has-bg .intel-rail .nine-block { background: color-mix(in srgb, var(--card)
 .ex-row { padding: 6px 12px; font-size: 13px; line-height: 1.6; display: flex; align-items: baseline; }
 .aside-row { display: flex; gap: 8px; align-items: flex-start; padding: 8px 12px; font-size: 12.5px; color: var(--ink2); line-height: 1.75; border-bottom: 1px solid var(--line); }
 .aside-label { flex: 0 0 62px; font-weight: 800; }
-.mind-line { display: flex; align-items: flex-start; gap: 7px; padding: 6px 12px; font-size: 13.5px; line-height: 1.8; }
-.mind-ava { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; margin-top: 2px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nb-c, #ab8cc9) 40%, transparent); }
+/* 心理活动：按角色分组（头像+名字首行，内容在下方整齐左对齐，永不出现在头像正下方） */
+.mind-block { padding: 8px 12px; border-bottom: 1px dashed var(--line); }
+.mind-block:last-child { border-bottom: none; }
+.mind-head { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+.mind-ava { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--nb-c, #ab8cc9) 40%, transparent); }
 .mind-ava-em { display: inline-flex; align-items: center; justify-content: center; font-size: 12px; background: var(--card2); }
-.mind-name { font-weight: 800; flex-shrink: 0; }
-.mind-text { flex: 1; min-width: 0; color: var(--ink2); }
+.mind-name { font-weight: 800; font-family: var(--head-font); letter-spacing: .08em; }
+.mind-body { padding-left: 29px; font-size: 13.5px; line-height: 1.85; color: var(--ink2); word-break: break-word; }
 
 /* ---------- 结构化格式卡片（旧经典模式兼容） ---------- */
 .fmt-time, .fmt-scene {

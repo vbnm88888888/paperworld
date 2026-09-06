@@ -310,28 +310,6 @@ input[type="range"] { width: 100%; accent-color: var(--acc); }
 .ent-fx-name { font-family: var(--head-font); font-size: 40px; font-weight: 800; letter-spacing: .12em; color: #f0e6cf; text-shadow: 0 0 24px rgba(212, 175, 55, .5); }
 .ent-fx-tier { margin-top: 12px; font-family: var(--head-font); font-size: 21px; letter-spacing: .3em; color: #d4af37; }
 
-/* ---------- 帝国结局（娱乐圈 · 董事会验收） ---------- */
-.ent-ending {
-  position: fixed; inset: 0; z-index: 128;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(6, 8, 14, .8); backdrop-filter: blur(4px);
-  animation: fadeIn .2s; padding: 20px;
-}
-.ent-ending-card {
-  width: min(92vw, 420px); border-radius: 16px; padding: 28px 24px 22px;
-  text-align: center; animation: popIn .25s cubic-bezier(.2,1.4,.4,1);
-  background: linear-gradient(165deg, #14100a, #1f1810);
-  border: 1px solid rgba(212, 175, 55, .4);
-  box-shadow: 0 20px 60px rgba(0,0,0,.5);
-  color: #ece5d4;
-}
-.ent-ending-card.lose { background: linear-gradient(165deg, #0d1018, #161a24); border-color: rgba(120, 130, 155, .4); }
-.ent-ending-card .ee-kicker { font-size: 12.5px; letter-spacing: .3em; color: #d4af37; }
-.ent-ending-card.lose .ee-kicker { color: #8fa0bd; }
-.ent-ending-card .ee-title { font-family: var(--head-font); font-size: 34px; font-weight: 800; letter-spacing: .2em; margin: 12px 0 10px; color: #f0e6cf; }
-.ent-ending-card .ee-stats { font-size: 12.5px; color: #b0a68c; }
-.ent-ending-card .ee-sub { font-size: 13px; line-height: 1.9; color: #9a8f76; margin-top: 12px; }
-
 /* ---------- 成就（设置页） ---------- */
 .ach-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .ach-cell {

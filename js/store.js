@@ -73,11 +73,9 @@ window.PW = window.PW || {};
         phoneEnabled: tpl ? !!tpl.phone : !!opt.entMode,
         entMode: !!opt.entMode
       },
-      /* 娱乐圈模式「资本帝国」模拟层数据（自由自定模式为 null，互不影响） */
+      /* 娱乐圈模式「资本帝国」模拟层数据（自由自定模式为 null，互不影响；用户无敌：无行动点/无失败结局） */
       ent: opt.entMode ? {
         week: 1,
-        ap: (PW.ENT && PW.ENT.AP_PER_WEEK) || 5,
-        apMax: (PW.ENT && PW.ENT.AP_PER_WEEK) || 5,
         cash: (PW.ENT && PW.ENT.START_CASH) || 3000,
         lastIncome: 0,
         sel: '',        // 当前选中艺人（界面态）

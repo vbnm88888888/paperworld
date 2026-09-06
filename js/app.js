@@ -102,8 +102,7 @@
         affFxList: [],
 
         /* 娱乐圈演出层 */
-        entFx: null,           // 晋升庆典全屏特效 {name, tier, key}
-        entEndingOpen: false   // 董事会结局结算页
+        entFx: null            // 晋升庆典全屏特效 {name, tier, key}
       };
     },
 
@@ -160,18 +159,7 @@
         if (!ent) return '';
         return ent.cash >= 10000 ? (ent.cash / 10000).toFixed(2) + ' 亿' : ent.cash + ' 万';
       },
-      /* 董事会通牒：目标文案 */
-      entGoalText() {
-        const ent = this.story && this.story.ent;
-        if (!ent) return '';
-        if (Object.values(ent.arts).some(a => a.tier === '超一线')) return '👑 已有超一线坐镇 · 目标达成';
-        return '目标：第 ' + (PW.ENT.DEADLINE || 36) + ' 周验收前，送一位艺人登顶超一线';
-      },
-      entTopCount() {
-        const ent = this.story && this.story.ent;
-        if (!ent) return 0;
-        return Object.values(ent.arts).filter(a => a.tier === '超一线').length;
-      },
+      /* 董事会通牒：已按用户要求移除胜负局，资本无敌 */
       /* 成就 */
       achList() {
         return (PW.ACHIEVEMENTS || []).map(a => ({
@@ -380,25 +368,23 @@
         return ent.arts[name];
       },
       entSelect(name) { if (this.story && this.story.ent) this.story.ent.sel = name; },
-      entSpend(cost, kind, target) {
-        const ent = this.story && this.story.ent;
-        if (!ent || this.busy) return false;
-        if (ent.ap < cost) { this.toast('行动点不足：进入下一周补满', '⏳'); return false; }
-        ent.ap -= cost;
-        this.switchTab('plot');
-        this.inputText = '（资本行动·' + kind + (target ? '：' + target : '') + '）';
-        this.send();
-        return true;
-      },
+      /* 资本无敌：行动无消耗、永不失败 */
       entAction(kind) {
         const ent = this.story && this.story.ent;
-        if (!ent) return;
+        if (!ent || this.busy) return;
         const name = ent.sel || (this.entArtists[0] && this.entArtists[0].name);
         if (!name) { this.toast('还没有签约艺人，先去「角色」页添加', '👑'); return; }
         if (kind === '夜访') this.unlockAch('night1');
-        this.entSpend(1, kind, name);
+        this.switchTab('plot');
+        this.inputText = '（资本行动·' + kind + '：' + name + '）';
+        this.send();
       },
-      entPressHot(text) { this.entSpend(1, '压热搜', '#' + text + '#'); },
+      entPressHot(text) {
+        if (this.busy) return;
+        this.switchTab('plot');
+        this.inputText = '（资本行动·压热搜：#' + text + '#）';
+        this.send();
+      },
       entNextWeek() {
         const ent = this.story && this.story.ent;
         if (!ent || this.busy) return;
@@ -408,23 +394,10 @@
         ent.lastIncome = inc;
         arts.forEach(a => { a.heat = Math.max(0, (a.heat || 0) - (PW.ENT.HEAT_DECAY || 4)); });
         ent.week++;
-        ent.ap = ent.apMax;
         if (ent.week >= 12) this.unlockAch('week12');
         if (this.story) this.story.progressNote = '第' + ent.week + '周 · 上周流水+' + inc + '万';
         this.switchTab('plot');
-        const dl = PW.ENT.DEADLINE || 36;
-        if (ent.week >= dl) {
-          /* 董事会最终验收：有超一线 = 加冕，否则出局 */
-          const win = Object.values(ent.arts).some(a => a.tier === '超一线');
-          ent.ended = win ? 'win' : 'lose';
-          if (win) this.unlockAch('ent_win');
-          this.entEndingOpen = true;
-          this.inputText = '（进入第' + ent.week + '周：董事会最终验收。写这场验收大戏——'
-            + (win ? '旗下已有艺人登顶超一线，写董事会的庆功、加冕与新一轮野心' : '尚无超一线艺人，写董事会发难、股东逼宫与资本困局')
-            + '，数值变化用[[ENT:...]]回报）';
-        } else {
-          this.inputText = '（进入第' + ent.week + '周：写一周蒙太奇周报——随机事件1~2条、各签约艺人本周动态与作品进展，数值变化用[[ENT:...]]回报）';
-        }
+        this.inputText = '（进入第' + ent.week + '周：写一周蒙太奇周报——随机事件1~2条、各签约艺人本周动态与作品进展，数值变化用[[ENT:...]]回报）';
         this.send();
       },
       /* 解析 AI 回复末尾的 [[ENT:...]] 隐藏标记 → 更新模拟层 */
@@ -1635,7 +1608,7 @@
         return '<div class="card-aside">'
           + rows.map(r => '<div class="aside-row"><b class="aside-label">' + this.mdInline(r.label) + '</b><span>' + this.mdInline(r.body) + '</span></div>').join('') + '</div>';
       },
-      /* 心理卡：```text 代码块内 角色名：内容 逐行（兼容旧格式） */
+      /* 心理卡：```text 代码块 → 按角色分组（头像+名字首行，内容整齐对齐左列） */
       renderMindPart(p) {
         let md = String(p.md || '');
         const cb = md.match(/```[a-zA-Z]*\s*\n([\s\S]*?)(?:```|$)/);
@@ -1643,18 +1616,30 @@
         md = md.replace(/```[a-zA-Z]*\n?/g, '');
         const lines = md.split('\n').map(l => l.trim()).filter(Boolean);
         if (!lines.length) return this.mdDoc(p.md);
-        return '<div class="card-mind">'
-          + lines.map(l => {
-            const m = l.match(/^([^：:]{1,12})[：:]\s*(.*)$/);
-            let ava = '';
-            if (m) {
-              const src = this.npcAvSrc(m[1]);
-              ava = src ? '<img class="mind-ava" src="' + src + '" alt="">'
-                : '<span class="mind-ava mind-ava-em">' + (this.npcAvEmoji(m[1]) || '💭') + '</span>';
-            }
-            return '<div class="mind-line">' + ava + (m ? '<span class="mind-name">' + this.mdInline(m[1]) + '</span>' : '')
-              + '<span class="mind-text">' + this.mdInline(m ? m[2] : l) + '</span></div>';
-          }).join('') + '</div>';
+        const blocks = [];   // {name, body:[]}：同名角色的连续行合并为一块
+        lines.forEach(l => {
+          const m = l.match(/^([^：:]{1,12})[：:]\s*(.*)$/);
+          if (m) {
+            const name = m[1].trim();
+            let b = blocks[blocks.length - 1];
+            if (!b || b.name !== name) { b = { name, body: [] }; blocks.push(b); }
+            if (m[2]) b.body.push(m[2]);
+          } else if (blocks.length) blocks[blocks.length - 1].body.push(l);
+          else blocks.push({ name: '', body: [l] });
+        });
+        const html = blocks.map(b => {
+          let ava = '';
+          if (b.name) {
+            const src = this.npcAvSrc(b.name);
+            ava = src ? '<img class="mind-ava" src="' + src + '" alt="">'
+              : '<span class="mind-ava mind-ava-em">' + (this.npcAvEmoji(b.name) || '💭') + '</span>';
+          }
+          return '<div class="mind-block">'
+            + (b.name ? '<div class="mind-head">' + ava + '<span class="mind-name">' + this.mdInline(b.name) + '</span></div>' : '')
+            + '<div class="mind-body">' + b.body.map(x => this.mdInline(x)).join('<br>') + '</div>'
+            + '</div>';
+        }).join('');
+        return '<div class="card-mind">' + html + '</div>';
       },
       /* 从最新一条AI消息回写游戏状态机（解析新版纯文本标记：[时间]/[场景]/第X天/✅探索） */
       updateSessionState(msg) {
