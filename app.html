@@ -2,21 +2,21 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260906-a';</script>
-  <!-- build 20260906-a · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
+  <script>window.__HTML_BUILD__='20260906-b';</script>
+  <!-- build 20260906-b · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
   <meta http-equiv="Cache-Control" content="no-store">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0e1320">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>纸上人间 · AI文字模拟游戏</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
-  <link rel="stylesheet" href="css/base.css?v=17">
-  <link rel="stylesheet" href="css/shelf.css?v=17">
-  <link rel="stylesheet" href="css/story.css?v=17">
-  <link rel="stylesheet" href="css/npc.css?v=17">
-  <link rel="stylesheet" href="css/editor.css?v=17">
-  <link rel="stylesheet" href="css/phone.css?v=17">
-  <script src="js/vendor/vue.global.prod.js?v=17"></script>
+  <link rel="stylesheet" href="css/base.css?v=18">
+  <link rel="stylesheet" href="css/shelf.css?v=18">
+  <link rel="stylesheet" href="css/story.css?v=18">
+  <link rel="stylesheet" href="css/npc.css?v=18">
+  <link rel="stylesheet" href="css/editor.css?v=18">
+  <link rel="stylesheet" href="css/phone.css?v=18">
+  <script src="js/vendor/vue.global.prod.js?v=18"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -582,6 +582,15 @@
                         <i v-for="i in story.ent.apMax" :key="i" :class="{on: i <= story.ent.ap}"></i>
                       </div>
                     </div>
+                    <div class="cap-deadline">
+                      <div class="cap-dl-text">董事会通牒 · 第 {{ story.ent.week }} / 36 周</div>
+                      <div class="cap-dl-bar"><i :style="{width: Math.min(100, story.ent.week * 100 / 36) + '%'}"></i></div>
+                      <div class="cap-dl-goal">{{ entGoalText }}</div>
+                    </div>
+                    <div class="cap-ended" v-if="story.ent.ended" :class="story.ent.ended">
+                      <b>{{ story.ent.ended === 'win' ? '🏆 验收通过 · 功成名就' : '🃏 验收未达 · 黯然出局' }}</b>
+                      <button class="cap-ended-btn" @click="entEndingOpen = true">重看结局</button>
+                    </div>
 
                     <div class="cap-sec">旗下艺人<span class="cap-hint">点选艺人后执行行动</span></div>
                     <div class="cap-artist" v-for="a in entArtists" :key="a.name" :class="{sel: story.ent.sel === a.name}" @click="entSelect(a.name)">
@@ -913,6 +922,15 @@
       </div>
 
       <div class="set-group">
+        <div class="set-row" style="flex-direction:column;align-items:stretch">
+          <div class="s-label" style="margin-bottom:8px"><b>成就 · {{ achEarnedCount }} / {{ achList.length }}</b><span>两种模式共同收集</span></div>
+          <div class="ach-grid">
+            <div class="ach-cell" v-for="a in achList" :key="a.id" :class="{on: a.earned}" :title="a.desc">
+              <span class="em">{{ a.earned ? a.icon : '🔒' }}</span>
+              <span class="ach-name">{{ a.name }}</span>
+            </div>
+          </div>
+        </div>
         <div class="set-row">
           <div class="s-label"><b>外观</b></div>
           <div class="seg">
@@ -1303,18 +1321,42 @@
     <b>⚠️ {{ err.title }}</b>{{ err.detail }}
   </div>
   <div class="aff-fx" v-for="fx in affFxList" :key="fx.id" :style="fx.style">{{ fx.text }}</div>
+
+  <!-- 晋升庆典（娱乐圈） -->
+  <div class="ent-fx" v-if="entFx" :key="entFx.key">
+    <div class="ent-fx-rays"></div>
+    <div class="ent-fx-card">
+      <div class="ent-fx-kicker">✦ 晋升庆典 ✦</div>
+      <div class="ent-fx-name">{{ entFx.name }}</div>
+      <div class="ent-fx-tier">晋位 · {{ entFx.tier }}</div>
+    </div>
+  </div>
+
+  <!-- 帝国结局（娱乐圈 · 董事会验收） -->
+  <div class="ent-ending" v-if="entEndingOpen && story && story.ent && story.ent.ended" @click.self="entEndingOpen=false">
+    <div class="ent-ending-card" :class="story.ent.ended">
+      <div class="ee-kicker">{{ story.ent.ended === 'win' ? '🏆 董事会验收 · 通过' : '🃏 董事会验收 · 未达标准' }}</div>
+      <div class="ee-title">{{ story.ent.ended === 'win' ? '功成名就' : '黯然出局' }}</div>
+      <div class="ee-stats">第 {{ story.ent.week }} 周 · 资金 ¥{{ entCashText }} · 旗下艺人 {{ entArtists.length }} 位（超一线 {{ entTopCount }} 位）</div>
+      <p class="ee-sub">{{ story.ent.ended === 'win' ? '从今往后，你的名字就是娱乐圈的注脚。' : '圈子还在，牌桌换人。三年之期已到——但资本永不眠，你可以继续经营，等一个翻身局。' }}</p>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn" style="flex:1" @click="entEndingOpen=false">继续经营</button>
+        <button class="btn primary" style="flex:1" @click="entEndingOpen=false; switchTab('phone'); phoneView='capital'">回到面板</button>
+      </div>
+    </div>
+  </div>
 </div>
 
-<script src="js/config.js?v=17"></script>
-<script src="js/templates.js?v=17"></script>
-<script src="js/store.js?v=17"></script>
-<script src="js/api.js?v=17"></script>
-<script src="js/rag.js?v=17"></script>
-<script src="js/prompts.js?v=17"></script>
-<script src="js/avatars.js?v=17"></script>
-<script src="js/affinity.js?v=17"></script>
-<script src="js/randomnpc.js?v=17"></script>
-<script src="js/phone.js?v=17"></script>
-<script src="js/app.js?v=17"></script>
+<script src="js/config.js?v=18"></script>
+<script src="js/templates.js?v=18"></script>
+<script src="js/store.js?v=18"></script>
+<script src="js/api.js?v=18"></script>
+<script src="js/rag.js?v=18"></script>
+<script src="js/prompts.js?v=18"></script>
+<script src="js/avatars.js?v=18"></script>
+<script src="js/affinity.js?v=18"></script>
+<script src="js/randomnpc.js?v=18"></script>
+<script src="js/phone.js?v=18"></script>
+<script src="js/app.js?v=18"></script>
 </body>
 </html>

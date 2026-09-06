@@ -99,7 +99,11 @@
         /* 提示 */
         toastShow: false, toastText: '', toastIcon: '✨', _toastTimer: null,
         err: { show: false, title: '', detail: '' },
-        affFxList: []
+        affFxList: [],
+
+        /* 娱乐圈演出层 */
+        entFx: null,           // 晋升庆典全屏特效 {name, tier, key}
+        entEndingOpen: false   // 董事会结局结算页
       };
     },
 
@@ -156,6 +160,26 @@
         if (!ent) return '';
         return ent.cash >= 10000 ? (ent.cash / 10000).toFixed(2) + ' 亿' : ent.cash + ' 万';
       },
+      /* 董事会通牒：目标文案 */
+      entGoalText() {
+        const ent = this.story && this.story.ent;
+        if (!ent) return '';
+        if (Object.values(ent.arts).some(a => a.tier === '超一线')) return '👑 已有超一线坐镇 · 目标达成';
+        return '目标：第 ' + (PW.ENT.DEADLINE || 36) + ' 周验收前，送一位艺人登顶超一线';
+      },
+      entTopCount() {
+        const ent = this.story && this.story.ent;
+        if (!ent) return 0;
+        return Object.values(ent.arts).filter(a => a.tier === '超一线').length;
+      },
+      /* 成就 */
+      achList() {
+        return (PW.ACHIEVEMENTS || []).map(a => ({
+          id: a.id, icon: a.icon, name: a.name, desc: a.desc,
+          earned: !!(this.settings.ach && this.settings.ach[a.id])
+        }));
+      },
+      achEarnedCount() { return this.achList.filter(a => a.earned).length; },
       /* 手机桌面壁纸（自定义 > 故事封面渐变兜底） */
       phoneWallOn() { return !!(this.settings.phoneWallpaper && this.settings.phoneWallpaper.img); },
       phoneWallStyle() {
@@ -322,6 +346,29 @@
         this.toast('已恢复故事封面壁纸', '🖼');
       },
 
+      /* ---------- 成就（跨模式收集） ---------- */
+      unlockAch(id) {
+        const def = (PW.ACHIEVEMENTS || []).find(a => a.id === id);
+        if (!def) return;
+        if (!this.settings.ach) this.settings.ach = {};
+        if (this.settings.ach[id]) return;
+        this.settings.ach[id] = Date.now();
+        this.toast('🏆 成就解锁 · ' + def.name, def.icon);
+      },
+      /* 晋升庆典全屏特效 */
+      entPromoFx(name, tier) {
+        this.entFx = { name, tier, key: Date.now() };
+        clearTimeout(this._entFxTimer);
+        this._entFxTimer = setTimeout(() => { this.entFx = null; }, 2600);
+        if (tier === '一线') this.unlockAch('tier1');
+        if (tier === '超一线') this.unlockAch('tier_top');
+      },
+      entOnTierUp(name, oldTier, newTier) {
+        if (!newTier || oldTier === newTier) return;
+        const oi = PW.ENT.TIERS.indexOf(oldTier), ni = PW.ENT.TIERS.indexOf(newTier);
+        if (ni > oi) this.entPromoFx(name, newTier);
+      },
+
       /* ---------- 娱乐圈模式：资本帝国 ---------- */
       ensureArt(name) {
         const ent = this.story && this.story.ent;
@@ -348,6 +395,7 @@
         if (!ent) return;
         const name = ent.sel || (this.entArtists[0] && this.entArtists[0].name);
         if (!name) { this.toast('还没有签约艺人，先去「角色」页添加', '👑'); return; }
+        if (kind === '夜访') this.unlockAch('night1');
         this.entSpend(1, kind, name);
       },
       entPressHot(text) { this.entSpend(1, '压热搜', '#' + text + '#'); },
@@ -361,9 +409,22 @@
         arts.forEach(a => { a.heat = Math.max(0, (a.heat || 0) - (PW.ENT.HEAT_DECAY || 4)); });
         ent.week++;
         ent.ap = ent.apMax;
+        if (ent.week >= 12) this.unlockAch('week12');
         if (this.story) this.story.progressNote = '第' + ent.week + '周 · 上周流水+' + inc + '万';
         this.switchTab('plot');
-        this.inputText = '（进入第' + ent.week + '周：写一周蒙太奇周报——随机事件1~2条、各签约艺人本周动态与作品进展，数值变化用[[ENT:...]]回报）';
+        const dl = PW.ENT.DEADLINE || 36;
+        if (ent.week >= dl) {
+          /* 董事会最终验收：有超一线 = 加冕，否则出局 */
+          const win = Object.values(ent.arts).some(a => a.tier === '超一线');
+          ent.ended = win ? 'win' : 'lose';
+          if (win) this.unlockAch('ent_win');
+          this.entEndingOpen = true;
+          this.inputText = '（进入第' + ent.week + '周：董事会最终验收。写这场验收大戏——'
+            + (win ? '旗下已有艺人登顶超一线，写董事会的庆功、加冕与新一轮野心' : '尚无超一线艺人，写董事会发难、股东逼宫与资本困局')
+            + '，数值变化用[[ENT:...]]回报）';
+        } else {
+          this.inputText = '（进入第' + ent.week + '周：写一周蒙太奇周报——随机事件1~2条、各签约艺人本周动态与作品进展，数值变化用[[ENT:...]]回报）';
+        }
         this.send();
       },
       /* 解析 AI 回复末尾的 [[ENT:...]] 隐藏标记 → 更新模拟层 */
@@ -377,7 +438,10 @@
           const head = parts[0] || '';
           if (head.indexOf('资金') === 0) {
             const n = parseFloat(head.replace(/[^0-9+\-.]/g, ''));
-            if (!isNaN(n)) ent.cash = Math.max(0, Math.round(ent.cash + n));
+            if (!isNaN(n)) {
+              ent.cash = Math.max(0, Math.round(ent.cash + n));
+              if (ent.cash >= 10000) this.unlockAch('cash_1e');
+            }
             continue;
           }
           if (head === '热搜+' || head === '热搜') {
@@ -386,6 +450,8 @@
               ent.hot = ent.hot.filter(h => h.text !== text);
               ent.hot.unshift({ text, heat: 50 + Math.floor(Math.random() * 40) });
               if (ent.hot.length > 20) ent.hot.length = 20;
+              this.toast('🔥 热搜爆了：#' + text + '#', '🔥');
+              if (ent.hot.length >= 8) this.unlockAch('hot8');
             }
             continue;
           }
@@ -404,7 +470,12 @@
             const tm = kv.match(/^段位[：:](.+)$/);
             if (tm) {
               const t = tm[1].trim();
-              if (PW.ENT.TIERS.indexOf(t) >= 0) { art.tier = t; if (npc) npc.tier = t; }
+              if (PW.ENT.TIERS.indexOf(t) >= 0) {
+                const old = art.tier;
+                art.tier = t;
+                if (npc) npc.tier = t;
+                this.entOnTierUp(head, old, t);
+              }
               return;
             }
             const sm = kv.match(/^状态[：:](.+)$/);
@@ -417,10 +488,12 @@
         const up = PW.ENT.TIER_UP_HEAT || {};
         const i = PW.ENT.TIERS.indexOf(art.tier);
         if (i >= 0 && i < PW.ENT.TIERS.length - 1 && art.heat >= (up[art.tier] || 999)) {
+          const old = art.tier;
           art.tier = PW.ENT.TIERS[i + 1];
           const npc = this.story.npcs.find(n => n.name === name);
           if (npc) npc.tier = art.tier;
           this.toast('🎉 ' + name + ' 晋升 ' + art.tier + '！', '👑');
+          this.entOnTierUp(name, old, art.tier);
         }
       },
       cycleTheme() { this.settings.theme = this._resolvedTheme === 'dark' ? 'light' : 'dark'; },
@@ -664,6 +737,8 @@
         this.stories.push(st);
         this.wizard.open = false;
         this.openStory(st.id);
+        this.unlockAch('first_story');
+        if (ent) this.unlockAch('first_sign');
         this.toast(ent ? '资本帝国开张：手机里点「资本」开始运作' : '创建成功，开始你的故事吧', ent ? '👑' : '🎬');
       },
 
@@ -1703,7 +1778,19 @@
       },
       gmOpening() { this.doSend('ctrl', '请为故事开场：交代时间地点与氛围，并让一位在场NPC与玩家自然相遇'); },
       continuePlot() { if (!this.busy) this.doSend('ctrl', '继续推进剧情'); },
-      dice() { if (!this.busy) this.doSend('ctrl', '随机事件：请引入一个意料之外的突发状况，让剧情出现转折'); },
+      dice() {
+        if (this.busy) return;
+        /* 娱乐圈模式：从圈内事件表抽骰 */
+        if (this.entModeOn && this.story && this.story.ent) {
+          const evs = PW.ENT_EVENTS || [];
+          if (evs.length) {
+            const ev = evs[Math.floor(Math.random() * evs.length)];
+            this.doSend('ctrl', '突发事件：' + ev + '。演出这场风波的完整剧情，数值变化用[[ENT:...]]回报');
+            return;
+          }
+        }
+        this.doSend('ctrl', '随机事件：请引入一个意料之外的突发状况，让剧情出现转折');
+      },
       useChoice(m, ci) {
         if (this.busy) return;
         m.choicesUsed = true;
@@ -1770,6 +1857,11 @@
         const parsed = PW.Affinity.parse(raw);
         this.applyEntMarks(raw);
         const phone = this.extractPhoneMarks(parsed.clean);
+        /* 成就钩子 */
+        if (this.story) {
+          if (this.story.chat.messages.length >= 20) this.unlockAch('pen20');
+          if (this.story.npcs.some(n => (n.affinity || 0) >= 90)) this.unlockAch('aff90');
+        }
         const sc = this.stripChoices(phone.clean);
         const msg = { id: PW.Store.uid('m'), kind: 'ai', text: sc.text.trim(), raw, ts: Date.now(), choices: sc.choices, choicesUsed: false };
         /* 乱文检测：长文本但标点密度异常低 → 提示重掷，防止污染后续生成 */

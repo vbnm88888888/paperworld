@@ -284,6 +284,67 @@ input[type="range"] { width: 100%; accent-color: var(--acc); }
 }
 .errbar b { display: block; margin-bottom: 2px; }
 
+/* ---------- 晋升庆典（娱乐圈） ---------- */
+.ent-fx {
+  position: fixed; inset: 0; z-index: 130;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 8, 14, .78); backdrop-filter: blur(3px);
+  animation: fadeIn .2s;
+  pointer-events: none;
+}
+.ent-fx-rays {
+  position: absolute; width: 220vmax; height: 220vmax;
+  background: repeating-conic-gradient(from 0deg, rgba(212, 175, 55, .12) 0deg 9deg, transparent 9deg 18deg);
+  animation: fxSpin 14s linear infinite;
+}
+@keyframes fxSpin { to { transform: rotate(360deg); } }
+.ent-fx-card {
+  position: relative; text-align: center; padding: 34px 52px;
+  border: 1px solid rgba(212, 175, 55, .55); border-radius: 14px;
+  background: linear-gradient(160deg, rgba(20, 16, 8, .92), rgba(34, 26, 12, .88));
+  box-shadow: 0 0 60px rgba(212, 175, 55, .35), inset 0 0 24px rgba(212, 175, 55, .12);
+  animation: fxCard .5s cubic-bezier(.2, 1.4, .4, 1) both;
+}
+@keyframes fxCard { 0% { transform: scale(.6) translateY(30px); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.ent-fx-kicker { font-size: 13px; letter-spacing: .5em; color: #d4af37; margin-bottom: 14px; }
+.ent-fx-name { font-family: var(--head-font); font-size: 40px; font-weight: 800; letter-spacing: .12em; color: #f0e6cf; text-shadow: 0 0 24px rgba(212, 175, 55, .5); }
+.ent-fx-tier { margin-top: 12px; font-family: var(--head-font); font-size: 21px; letter-spacing: .3em; color: #d4af37; }
+
+/* ---------- 帝国结局（娱乐圈 · 董事会验收） ---------- */
+.ent-ending {
+  position: fixed; inset: 0; z-index: 128;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 8, 14, .8); backdrop-filter: blur(4px);
+  animation: fadeIn .2s; padding: 20px;
+}
+.ent-ending-card {
+  width: min(92vw, 420px); border-radius: 16px; padding: 28px 24px 22px;
+  text-align: center; animation: popIn .25s cubic-bezier(.2,1.4,.4,1);
+  background: linear-gradient(165deg, #14100a, #1f1810);
+  border: 1px solid rgba(212, 175, 55, .4);
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  color: #ece5d4;
+}
+.ent-ending-card.lose { background: linear-gradient(165deg, #0d1018, #161a24); border-color: rgba(120, 130, 155, .4); }
+.ent-ending-card .ee-kicker { font-size: 12.5px; letter-spacing: .3em; color: #d4af37; }
+.ent-ending-card.lose .ee-kicker { color: #8fa0bd; }
+.ent-ending-card .ee-title { font-family: var(--head-font); font-size: 34px; font-weight: 800; letter-spacing: .2em; margin: 12px 0 10px; color: #f0e6cf; }
+.ent-ending-card .ee-stats { font-size: 12.5px; color: #b0a68c; }
+.ent-ending-card .ee-sub { font-size: 13px; line-height: 1.9; color: #9a8f76; margin-top: 12px; }
+
+/* ---------- 成就（设置页） ---------- */
+.ach-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.ach-cell {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 9px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card2);
+  font-size: 11.5px; color: var(--ink3); overflow: hidden;
+}
+.ach-cell .em { font-size: 15px; filter: grayscale(1) opacity(.55); }
+.ach-cell.on { color: var(--ink); border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); background: color-mix(in srgb, var(--gold) 8%, transparent); }
+.ach-cell.on .em { filter: none; }
+.ach-cell .ach-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* 桌面端 */
 @media (min-width: 900px) {
   body { font-size: 15.5px; }
