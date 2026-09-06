@@ -59,7 +59,7 @@
         classicView: true,
         keyVisible: false,
         newModelId: '',
-        wizard: { open: false, step: 0, genreKey: 'blank', title: '', idea: '', worldview: '', rules: [], npcs: [], player: { name: '', gender: '女', age: '', persona: '', avatar: null }, genBusy: false },
+        wizard: { open: false, step: 0, mode: 'free', genreKey: 'blank', title: '', idea: '', worldview: '', rules: [], npcs: [], player: { name: '', gender: '女', age: '', persona: '', avatar: null }, genBusy: false },
 
         /* NPC */
         drawer: { open: false, ctx: 'story', index: -1, isNew: true, form: {} },
@@ -143,6 +143,22 @@
       },
       /* 娱乐圈模式：微博/饭圈与资本玩法开关 */
       entModeOn() { return !!(this.story && this.story.settings && this.story.settings.entMode); },
+      /* 旗下艺人（娱乐圈模式）：NPC + 模拟层数值合并 */
+      entArtists() {
+        const ent = this.story && this.story.ent;
+        if (!ent) return [];
+        return this.presentNpcs.map(n => {
+          if (!ent.arts[n.name]) {
+            ent.arts[n.name] = { tier: n.tier || '十八线', heat: 20, res: 20, loyalty: 60, mood: 60, rep: 55, status: n.state || '新签约' };
+          }
+          return { name: n.name, npc: n, art: ent.arts[n.name] };
+        });
+      },
+      entCashText() {
+        const ent = this.story && this.story.ent;
+        if (!ent) return '';
+        return ent.cash >= 10000 ? (ent.cash / 10000).toFixed(2) + ' 亿' : ent.cash + ' 万';
+      },
       /* 手机桌面壁纸（自定义 > 故事封面渐变兜底） */
       phoneWallOn() { return !!(this.settings.phoneWallpaper && this.settings.phoneWallpaper.img); },
       phoneWallStyle() {
@@ -307,6 +323,108 @@
       clearWallpaper() {
         this.settings.phoneWallpaper = null;
         this.toast('已恢复故事封面壁纸', '🖼');
+      },
+
+      /* ---------- 娱乐圈模式：资本帝国 ---------- */
+      ensureArt(name) {
+        const ent = this.story && this.story.ent;
+        if (!ent) return null;
+        if (!ent.arts[name]) {
+          const npc = this.story.npcs.find(n => n.name === name);
+          ent.arts[name] = { tier: (npc && npc.tier) || '十八线', heat: 20, res: 20, loyalty: 60, mood: 60, rep: 55, status: '' };
+        }
+        return ent.arts[name];
+      },
+      entSelect(name) { if (this.story && this.story.ent) this.story.ent.sel = name; },
+      entSpend(cost, kind, target) {
+        const ent = this.story && this.story.ent;
+        if (!ent || this.busy) return false;
+        if (ent.ap < cost) { this.toast('行动点不足：进入下一周补满', '⏳'); return false; }
+        ent.ap -= cost;
+        this.switchTab('plot');
+        this.inputText = '（资本行动·' + kind + (target ? '：' + target : '') + '）';
+        this.send();
+        return true;
+      },
+      entAction(kind) {
+        const ent = this.story && this.story.ent;
+        if (!ent) return;
+        const name = ent.sel || (this.entArtists[0] && this.entArtists[0].name);
+        if (!name) { this.toast('还没有签约艺人，先去「角色」页添加', '👑'); return; }
+        this.entSpend(1, kind, name);
+      },
+      entPressHot(text) { this.entSpend(1, '压热搜', '#' + text + '#'); },
+      entNextWeek() {
+        const ent = this.story && this.story.ent;
+        if (!ent || this.busy) return;
+        const arts = Object.values(ent.arts);
+        const inc = arts.reduce((s, a) => s + Math.round((a.heat || 0) * (PW.ENT.HEAT_INCOME || 2)), 0);
+        ent.cash += inc;
+        ent.lastIncome = inc;
+        arts.forEach(a => { a.heat = Math.max(0, (a.heat || 0) - (PW.ENT.HEAT_DECAY || 4)); });
+        ent.week++;
+        ent.ap = ent.apMax;
+        if (this.story) this.story.progressNote = '第' + ent.week + '周 · 上周流水+' + inc + '万';
+        this.switchTab('plot');
+        this.inputText = '（进入第' + ent.week + '周：写一周蒙太奇周报——随机事件1~2条、各签约艺人本周动态与作品进展，数值变化用[[ENT:...]]回报）';
+        this.send();
+      },
+      /* 解析 AI 回复末尾的 [[ENT:...]] 隐藏标记 → 更新模拟层 */
+      applyEntMarks(raw) {
+        const ent = this.story && this.story.ent;
+        if (!ent) return;
+        const rx = /\[\[ENT:([^\]]+)\]\]/g;
+        let m;
+        while ((m = rx.exec(String(raw)))) {
+          const parts = m[1].split('|').map(s => s.trim()).filter(Boolean);
+          const head = parts[0] || '';
+          if (head.indexOf('资金') === 0) {
+            const n = parseFloat(head.replace(/[^0-9+\-.]/g, ''));
+            if (!isNaN(n)) ent.cash = Math.max(0, Math.round(ent.cash + n));
+            continue;
+          }
+          if (head === '热搜+' || head === '热搜') {
+            const text = (parts[1] || '').replace(/^#|#$/g, '').trim();
+            if (text) {
+              ent.hot = ent.hot.filter(h => h.text !== text);
+              ent.hot.unshift({ text, heat: 50 + Math.floor(Math.random() * 40) });
+              if (ent.hot.length > 20) ent.hot.length = 20;
+            }
+            continue;
+          }
+          /* 艺人数值 */
+          const art = this.ensureArt(head);
+          const npc = this.story.npcs.find(n => n.name === head);
+          parts.slice(1).forEach(kv => {
+            const hm = kv.match(/^热度([+\-−]\d+)$/);
+            if (hm) {
+              art.heat = Math.max(0, Math.min(100, (art.heat || 0) + parseInt(hm[1].replace('−', '-'), 10)));
+              this.entCheckTier(head, art);
+              return;
+            }
+            const dm = kv.match(/^(资源|忠诚|心气|风评)([+\-−]\d+)$/);
+            if (dm) { art[dm[1]] = Math.max(0, Math.min(100, (art[dm[1]] || 50) + parseInt(dm[2].replace('−', '-'), 10))); return; }
+            const tm = kv.match(/^段位[：:](.+)$/);
+            if (tm) {
+              const t = tm[1].trim();
+              if (PW.ENT.TIERS.indexOf(t) >= 0) { art.tier = t; if (npc) npc.tier = t; }
+              return;
+            }
+            const sm = kv.match(/^状态[：:](.+)$/);
+            if (sm) { art.status = sm[1].trim(); if (npc) npc.state = art.status; }
+          });
+        }
+      },
+      /* 热度达标自动晋升（AI 忘写段位时的兜底） */
+      entCheckTier(name, art) {
+        const up = PW.ENT.TIER_UP_HEAT || {};
+        const i = PW.ENT.TIERS.indexOf(art.tier);
+        if (i >= 0 && i < PW.ENT.TIERS.length - 1 && art.heat >= (up[art.tier] || 999)) {
+          art.tier = PW.ENT.TIERS[i + 1];
+          const npc = this.story.npcs.find(n => n.name === name);
+          if (npc) npc.tier = art.tier;
+          this.toast('🎉 ' + name + ' 晋升 ' + art.tier + '！', '👑');
+        }
       },
       cycleTheme() { this.settings.theme = this._resolvedTheme === 'dark' ? 'light' : 'dark'; },
       addCustomModel() {
@@ -499,21 +617,57 @@
         this.drawer = { open: true, ctx: 'wizard', index: i, isNew: true, form: Object.assign({}, this.wizard.npcs[i]) };
       },
       wizDelNpc(i) { this.wizard.npcs.splice(i, 1); },
+      /* 新建向导：模式选择（自由自定 / 娱乐圈·资本帝国，两边互不影响） */
+      pickMode(m) {
+        this.wizard.mode = m;
+        if (m === 'ent') {
+          if (!this.wizard.worldview.trim()) this.wizard.worldview = PW.ENT_WORLDVIEW;
+          if (!this.wizard.player.persona.trim()) this.wizard.player.persona = '华京资本总裁，圈内最有手腕的幕后大佬：表面儒雅，实则寸土必争';
+        }
+      },
       createStory() {
         const key = this.wizard.genreKey;
-        const tpl = PW.TEMPLATES[key] || null;
-        const st = PW.Store.newStory(tpl, {
+        const ent = this.wizard.mode === 'ent';
+        let npcs = this.wizard.npcs.filter(n => n.name && n.name.trim()).map(n => Object.assign({}, n, { id: PW.Store.uid('npc') }));
+        /* 娱乐圈模式没捏艺人时，自动签下两位初始艺人 */
+        if (ent && !npcs.length) {
+          const used = [];
+          ['三线', '十八线'].forEach(tier => {
+            const n = PW.RandomNpc.localRandom('blank', used);
+            used.push(n.name);
+            npcs.push(Object.assign(n, { id: PW.Store.uid('npc'), affinity: 50, present: true, tier }));
+          });
+        }
+        const st = PW.Store.newStory(PW.TEMPLATES[key] || null, {
           genreKey: key,
-          title: this.wizard.title.trim() || (tpl ? tpl.name + '物语' : '我的故事'),
+          title: this.wizard.title.trim() || (ent ? '资本帝国' : '我的故事'),
           worldview: this.wizard.worldview,
           rules: this.wizard.rules.filter(r => r && r.trim()),
-          npcs: this.wizard.npcs.filter(n => n.name && n.name.trim()).map(n => Object.assign({}, n, { id: PW.Store.uid('npc') })),
-          player: Object.assign({}, this.wizard.player, { name: this.wizard.player.name.trim() || '我' })
+          npcs,
+          player: Object.assign({}, this.wizard.player, { name: this.wizard.player.name.trim() || (ent ? '总裁' : '我') }),
+          entMode: ent
         });
+        if (ent) {
+          const cover = { emoji: '👑', c1: '#a8823e', c2: '#3a2f4a' };
+          st.cover = cover;
+          const arts = {};
+          npcs.forEach(n => {
+            if (!n.tier) n.tier = '十八线';
+            arts[n.name] = {
+              tier: n.tier,
+              heat: n.tier === '超一线' ? 92 : n.tier === '一线' ? 78 : n.tier === '二线' ? 60 : n.tier === '三线' ? 45 : 18,
+              res: 20, loyalty: 60, mood: 60, rep: 55,
+              status: n.state || '新签约'
+            };
+          });
+          st.ent.arts = arts;
+          st.npcs = npcs;
+          st.progressNote = '第1周 · 资本开局';
+        }
         this.stories.push(st);
         this.wizard.open = false;
         this.openStory(st.id);
-        this.toast('创建成功，开始你的故事吧', '🎬');
+        this.toast(ent ? '资本帝国开张：手机里点「资本」开始运作' : '创建成功，开始你的故事吧', ent ? '👑' : '🎬');
       },
 
       /* ---------- 头像 ---------- */
@@ -1623,6 +1777,7 @@
         const raw = (rawContent || '').trim();
         if (!raw) return;
         const parsed = PW.Affinity.parse(raw);
+        this.applyEntMarks(raw);
         const phone = this.extractPhoneMarks(parsed.clean);
         const sc = this.stripChoices(phone.clean);
         const msg = { id: PW.Store.uid('m'), kind: 'ai', text: sc.text.trim(), raw, ts: Date.now(), choices: sc.choices, choicesUsed: false };

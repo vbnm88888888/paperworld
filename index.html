@@ -2,19 +2,19 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260905-d';</script>
+  <script>window.__HTML_BUILD__='20260905-e';</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0e1320">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>纸上人间 · AI文字模拟游戏</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
-  <link rel="stylesheet" href="css/base.css?v=15">
-  <link rel="stylesheet" href="css/shelf.css?v=15">
-  <link rel="stylesheet" href="css/story.css?v=15">
-  <link rel="stylesheet" href="css/npc.css?v=15">
-  <link rel="stylesheet" href="css/editor.css?v=15">
-  <link rel="stylesheet" href="css/phone.css?v=15">
-  <script src="js/vendor/vue.global.prod.js?v=15"></script>
+  <link rel="stylesheet" href="css/base.css?v=16">
+  <link rel="stylesheet" href="css/shelf.css?v=16">
+  <link rel="stylesheet" href="css/story.css?v=16">
+  <link rel="stylesheet" href="css/npc.css?v=16">
+  <link rel="stylesheet" href="css/editor.css?v=16">
+  <link rel="stylesheet" href="css/phone.css?v=16">
+  <script src="js/vendor/vue.global.prod.js?v=16"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -487,6 +487,7 @@
                   <div class="p-apps">
                     <div class="p-app" @click="openWxApp"><div class="icon wx">💬<span class="red-dot" v-if="wxUnread">{{ wxUnread }}</span></div><span>微信</span></div>
                     <div class="p-app" v-if="entModeOn" @click="openWbApp"><div class="icon wb">🔥<span class="red-dot" v-if="!story.phone.weibo.posts.length">new</span></div><span>微博</span></div>
+                    <div class="p-app" v-if="entModeOn" @click="phoneView='capital'"><div class="icon cap">👑</div><span>资本</span></div>
                   </div>
                   <div style="position:absolute;bottom:16px;left:0;right:0;text-align:center;color:rgba(255,255,255,.55);font-size:11px">
                     纸上人间 · {{ story.title }}
@@ -565,6 +566,48 @@
                         </div>
                       </div>
                     </div>
+                  </div>
+                </template>
+
+                <!-- 资本面板（娱乐圈模式） -->
+                <template v-else-if="phoneView==='capital' && story.ent">
+                  <div class="app-head"><button class="back" @click="phoneView='home'">‹</button><b>资本帝国</b><span class="op">👑 第 {{ story.ent.week }} 周</span></div>
+                  <div class="app-body cap-body">
+                    <div class="cap-top">
+                      <div class="cap-cash">¥ {{ entCashText }}</div>
+                      <div class="cap-ap">
+                        行动点
+                        <i v-for="i in story.ent.apMax" :key="i" :class="{on: i <= story.ent.ap}"></i>
+                      </div>
+                    </div>
+
+                    <div class="cap-sec">旗下艺人<span class="cap-hint">点选艺人后执行行动</span></div>
+                    <div class="cap-artist" v-for="a in entArtists" :key="a.name" :class="{sel: story.ent.sel === a.name}" @click="entSelect(a.name)">
+                      <div class="avatar">
+                        <img v-if="avSrc(a.npc)" :src="avSrc(a.npc)" alt="">
+                        <template v-else>{{ avEmoji(a.npc) }}</template>
+                      </div>
+                      <div class="cap-a-info">
+                        <div class="r1"><b>{{ a.name }}</b><span class="tier-badge" :class="'t-' + a.art.tier">{{ a.art.tier }}</span></div>
+                        <div class="cap-heat"><i :style="{width: a.art.heat + '%'}"></i></div>
+                        <div class="r2">{{ a.art.status || '暂无动态' }} · 热度 {{ a.art.heat }}</div>
+                      </div>
+                    </div>
+                    <div class="cap-empty" v-if="!entArtists.length">还没有签约艺人。去「角色」页添加（可设段位）。</div>
+
+                    <div class="cap-actions">
+                      <button class="cap-act" v-for="act in ['探班', '培训', '接综艺', '录歌', '饭局', '夜访', '买热搜']" :key="act"
+                              :disabled="!story.ent.sel || story.ent.ap < 1 || busy" @click="entAction(act)">{{ act }}</button>
+                    </div>
+
+                    <div class="cap-sec">热搜榜</div>
+                    <div class="cap-hot" v-for="(h, hi) in story.ent.hot" :key="hi">
+                      <span class="cap-hot-text">#{{ h.text }}#</span>
+                      <button class="cap-hbtn" :disabled="story.ent.ap < 1 || busy" @click="entPressHot(h.text)">压</button>
+                    </div>
+                    <div class="cap-empty" v-if="!story.ent.hot.length">暂无在榜热搜：剧情发酵或买热搜后出现在这里。</div>
+
+                    <button class="cap-week" :disabled="busy" @click="entNextWeek">⏭ 进入第 {{ story.ent.week + 1 }} 周（结算 + 补满行动点）</button>
                   </div>
                 </template>
 
@@ -952,9 +995,21 @@
       <h3>✨ 新故事 <span style="font-size:12px;color:var(--ink3);font-weight:400">第 {{ wizard.step+1 }} / 4 步</span></h3>
       <div class="wizard-steps"><div class="dot" v-for="i in 4" :key="i" :class="{on: wizard.step>=i-1}"></div></div>
 
-      <!-- 步骤1：题材 -->
+      <!-- 步骤1：模式 + 题材 -->
       <template v-if="wizard.step===0">
-        <div class="genre-grid">
+        <div class="mode-grid">
+          <div class="mode-card" :class="{on: wizard.mode==='free'}" @click="pickMode('free')">
+            <span class="em">📖</span>
+            <b>自由自定</b>
+            <p>任意世界观，扮演你的角色</p>
+          </div>
+          <div class="mode-card mode-ent" :class="{on: wizard.mode==='ent'}" @click="pickMode('ent')">
+            <span class="em">👑</span>
+            <b>娱乐圈 · 资本帝国</b>
+            <p>幕后资本：签约艺人、买热搜、拍戏冲超一线（仿玩转娱圈）</p>
+          </div>
+        </div>
+        <div class="genre-grid" v-if="wizard.mode==='free'">
           <div class="genre-cell" v-for="g in genreList" :key="g.key" :class="{on: wizard.genreKey===g.key}" @click="pickGenre(g.key)">
             <span class="em">{{ g.emoji }}</span>{{ g.name }}
           </div>
@@ -1024,7 +1079,7 @@
           <button class="btn sm" @click="wizAddNpcManual"><svg class="ico"><use href="#i-plus"/></svg> 手动添加</button>
           <button class="btn sm" @click="wizAddNpcLocal"><svg class="ico"><use href="#i-dice"/></svg> 随机生成一个</button>
         </div>
-        <p style="font-size:12.5px;color:var(--ink2);margin-bottom:12px">建议 2~3 个角色。之后随时可以在故事里增删、改人设。</p>
+        <p style="font-size:12.5px;color:var(--ink2);margin-bottom:12px">{{ wizard.mode==='ent' ? '不填也行：直接创建会自动签下两位初始艺人。给艺人设「艺人段位」后，资本面板可查看热度与晋升。' : '建议 2~3 个角色。之后随时可以在故事里增删、改人设。' }}</p>
         <div style="display:flex;gap:10px">
           <button class="btn" @click="wizard.step=2">← 上一步</button>
           <button class="btn primary" style="flex:1" @click="createStory"><svg class="ico"><use href="#i-play"/></svg> 创建并开始</button>
@@ -1248,16 +1303,16 @@
   <div class="aff-fx" v-for="fx in affFxList" :key="fx.id" :style="fx.style">{{ fx.text }}</div>
 </div>
 
-<script src="js/config.js?v=15"></script>
-<script src="js/templates.js?v=15"></script>
-<script src="js/store.js?v=15"></script>
-<script src="js/api.js?v=15"></script>
-<script src="js/rag.js?v=15"></script>
-<script src="js/prompts.js?v=15"></script>
-<script src="js/avatars.js?v=15"></script>
-<script src="js/affinity.js?v=15"></script>
-<script src="js/randomnpc.js?v=15"></script>
-<script src="js/phone.js?v=15"></script>
-<script src="js/app.js?v=15"></script>
+<script src="js/config.js?v=16"></script>
+<script src="js/templates.js?v=16"></script>
+<script src="js/store.js?v=16"></script>
+<script src="js/api.js?v=16"></script>
+<script src="js/rag.js?v=16"></script>
+<script src="js/prompts.js?v=16"></script>
+<script src="js/avatars.js?v=16"></script>
+<script src="js/affinity.js?v=16"></script>
+<script src="js/randomnpc.js?v=16"></script>
+<script src="js/phone.js?v=16"></script>
+<script src="js/app.js?v=16"></script>
 </body>
 </html>

@@ -70,8 +70,21 @@ window.PW = window.PW || {};
         styleId: tpl ? tpl.styleId : 'delicate',
         pov: 'third',
         optionsOn: true,
-        phoneEnabled: tpl ? !!tpl.phone : false
+        phoneEnabled: tpl ? !!tpl.phone : !!opt.entMode,
+        entMode: !!opt.entMode
       },
+      /* 娱乐圈模式「资本帝国」模拟层数据（自由自定模式为 null，互不影响） */
+      ent: opt.entMode ? {
+        week: 1,
+        ap: (PW.ENT && PW.ENT.AP_PER_WEEK) || 5,
+        apMax: (PW.ENT && PW.ENT.AP_PER_WEEK) || 5,
+        cash: (PW.ENT && PW.ENT.START_CASH) || 3000,
+        lastIncome: 0,
+        sel: '',        // 当前选中艺人（界面态）
+        arts: {},       // 艺人名 → {tier, heat, res, loyalty, mood, rep, status}
+        hot: [],        // 在榜热搜 [{text, heat}]
+        projects: []    // 进行中项目 [{type, name, npc, progress}]
+      } : null,
       snapshots: [],
       stats: { calls: 0, promptTokens: 0, completionTokens: 0 },
       progressNote: ''

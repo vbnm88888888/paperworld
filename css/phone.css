@@ -30,6 +30,7 @@
 .p-app:active .icon { transform: scale(.9); }
 .p-app .icon.wx { background: linear-gradient(135deg, #2aae67, #22a04f); }
 .p-app .icon.wb { background: linear-gradient(135deg, #e6552e, #d43c17); }
+.p-app .icon.cap { background: linear-gradient(135deg, #d4b06a, #a8823e); }
 .p-app .icon.sms { background: linear-gradient(135deg, #4f8ef7, #38c6d9); }
 .p-app .icon.camera { background: linear-gradient(135deg, #f7b84f, #f78fb0); }
 .p-app span { font-size: 11px; color: rgba(255,255,255,.9); }
@@ -56,6 +57,65 @@
   bottom: 0; width: 28px; height: 3px; border-radius: 2px; background: var(--acc);
 }
 .app-body { flex: 1; overflow-y: auto; padding: 12px; }
+
+/* ---------- 资本面板（娱乐圈模式） ---------- */
+.cap-body { padding: 0 0 24px; }
+.cap-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 14px; margin-bottom: 4px;
+  background: color-mix(in srgb, var(--gold) 12%, var(--card));
+  border-bottom: 1px solid color-mix(in srgb, var(--gold) 25%, var(--line));
+}
+.cap-cash { font-family: var(--head-font); font-weight: 800; font-size: 17px; letter-spacing: .04em; color: var(--gold); }
+.cap-ap { font-size: 12px; color: var(--ink2); display: flex; align-items: center; gap: 4px; }
+.cap-ap i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: inline-block; }
+.cap-ap i.on { background: var(--gold); }
+.cap-sec {
+  padding: 14px 14px 6px; font-family: var(--head-font); font-weight: 800;
+  font-size: 12.5px; letter-spacing: .2em; color: var(--gold);
+}
+.cap-hint { font-size: 11px; color: var(--ink3); font-weight: 400; letter-spacing: 0; margin-left: 7px; }
+.cap-artist {
+  display: flex; gap: 11px; padding: 10px 14px; align-items: center;
+  border-bottom: 1px dashed var(--line); cursor: pointer; transition: background .12s;
+}
+.cap-artist.sel { background: color-mix(in srgb, var(--gold) 9%, transparent); box-shadow: inset 3px 0 0 var(--gold); }
+.cap-artist .avatar { width: 42px; height: 42px; font-size: 19px; }
+.cap-a-info { flex: 1; min-width: 0; }
+.cap-a-info .r1 { display: flex; align-items: center; gap: 7px; }
+.cap-a-info .r1 b { font-family: var(--head-font); font-size: 14px; letter-spacing: .04em; }
+.tier-badge { font-size: 10px; padding: 1px 8px; border-radius: 4px; color: #fff; background: var(--ink3); white-space: nowrap; }
+.tier-badge.t-超一线 { background: linear-gradient(135deg, #e3bd53, #b8882e); color: #241a05; font-weight: 700; }
+.tier-badge.t-一线 { background: #c26a8a; }
+.tier-badge.t-二线 { background: #8f7ecf; }
+.tier-badge.t-三线 { background: #58a89d; }
+.tier-badge.t-十八线 { background: #8b97ab; }
+.tier-badge.t-素人 { background: #b0a48c; }
+.cap-heat { height: 4px; border-radius: 2px; background: var(--line); margin: 5px 0 4px; position: relative; overflow: hidden; }
+.cap-heat i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: linear-gradient(90deg, #d4af37, #e06a5a); }
+.cap-a-info .r2 { font-size: 11.5px; color: var(--ink3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-actions { display: flex; flex-wrap: wrap; gap: 7px; padding: 12px 14px 4px; }
+.cap-act {
+  font-size: 12.5px; padding: 7px 13px; border-radius: 8px;
+  border: 1px solid var(--line); color: var(--ink2); background: var(--card);
+  transition: all .12s;
+}
+.cap-act:active { border-color: var(--gold); color: var(--gold); transform: scale(.95); }
+.cap-act:disabled { opacity: .4; }
+.cap-hot { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-bottom: 1px dashed var(--line); }
+.cap-hot-text { flex: 1; min-width: 0; font-size: 12.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-hbtn { font-size: 11.5px; border: 1px solid var(--warn); color: var(--warn); border-radius: 6px; padding: 2px 11px; }
+.cap-hbtn:active { background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.cap-hbtn:disabled { opacity: .4; }
+.cap-empty { font-size: 12px; color: var(--ink3); padding: 6px 14px; line-height: 1.7; }
+.cap-week {
+  display: block; width: calc(100% - 28px); margin: 16px auto 0;
+  padding: 12px; border-radius: 10px; border: none;
+  background: var(--gold); color: var(--acc-ink, #171207);
+  font-weight: 700; font-size: 14px; letter-spacing: .05em;
+}
+.cap-week:active { transform: scale(.97); }
+.cap-week:disabled { opacity: .5; }
 
 /* 微信会话列表 */
 .wx-item { display: flex; gap: 11px; padding: 11px 8px; border-radius: 12px; align-items: center; cursor: pointer; }

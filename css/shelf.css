@@ -65,6 +65,19 @@
 .wizard-steps { display: flex; gap: 6px; margin-bottom: 16px; }
 .wizard-steps .dot { flex: 1; height: 3px; border-radius: 2px; background: var(--line); transition: background .2s; }
 .wizard-steps .dot.on { background: var(--gold); }
+/* 模式卡：自由自定 / 娱乐圈·资本帝国 */
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.mode-card {
+  position: relative; padding: 14px 12px; border-radius: 12px;
+  border: 1px solid var(--line); background: color-mix(in srgb, var(--card) 60%, transparent);
+  cursor: pointer; transition: all .15s; text-align: left;
+}
+.mode-card .em { font-size: 22px; display: block; margin-bottom: 6px; }
+.mode-card b { font-family: var(--head-font); font-size: 14.5px; letter-spacing: .04em; display: block; margin-bottom: 4px; }
+.mode-card p { font-size: 11.5px; color: var(--ink2); line-height: 1.6; }
+.mode-card.on { border-color: var(--acc); box-shadow: 0 0 0 1px var(--acc) inset; background: color-mix(in srgb, var(--acc) 7%, transparent); }
+.mode-card.mode-ent.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; background: color-mix(in srgb, var(--gold) 9%, transparent); }
+.mode-card.mode-ent b { color: var(--gold); }
 .genre-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
 @media (min-width: 640px) { .genre-grid { grid-template-columns: repeat(5, 1fr); } }
 .genre-cell {
