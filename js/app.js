@@ -1310,6 +1310,7 @@
       nfParts(m) {
         /* 界面自动迁移：解析器升级后（PARTS_VER 变化），旧消息的缓存分区在下一次渲染时
            自动按最新解析器全量重析——用户无需任何手动修复操作，打开界面即生效 */
+        try {
         const VER = (window.PW && PW.PARTS_VER) || 'v0';
         if (!m.parts || !m.parts.length || m.partsVer !== VER) {
           m.parts = this.parseParts(m.raw || m.text || '');
@@ -1334,6 +1335,15 @@
         }
         m.partsVer = VER;
         return m.parts;
+        } catch (err) {
+          try { console.error('[parts]', err); } catch (e2) {}
+          return this.nfPartsSafe(m);   // 解析失败 → 兜底为单个正文分区，绝不白屏
+        }
+      },
+      /* nfParts 解析失败时的最终兜底：返回最基础的正文分区，保证该消息至少能显示原文 */
+      nfPartsSafe(m) {
+        const raw = m.raw || m.text || '';
+        return [{ key: 'story', title: this.partDef('story').title, icon: this.partDef('story').icon, md: raw || '…', locked: false }];
       },
       /* 自救按钮：手动强制按最新解析器重解析本条（修复旧版本缓存出的空分区） */
       forceReparse(m) {
@@ -1400,18 +1410,36 @@
         const s = this.affBarStyle(v);
         return 'left:' + s.left + ';width:' + s.width + ';background:' + s.background;
       },
-      /* 分区渲染分发：未知/旧数据回落 mdDoc */
+      /* 分区渲染分发：未知/旧数据回落 mdDoc。
+         任何 render*Part 遇到异常输出（孤立代理/极长/未闭合标记等）都要安全降级，
+         绝不能外抛——否则整页白屏且内容全丢。 */
       renderPartHTML(p) {
-        switch (p.key) {
-          case 'time': return this.renderTimePart(p);
-          case 'scene': return this.renderScenePart(p);
-          case 'map': return this.renderMapPart(p);
-          case 'cast': return this.renderCastPart(p);
-          case 'schedule': return this.renderSchedulePart(p);
-          case 'explore': return this.renderExplorePart(p);
-          case 'aside': return this.renderAsidePart(p);
-          case 'mind': return this.renderMindPart(p);
-          default: return this.mdDoc(p.md);
+        if (!p || typeof p.key !== 'string') return this.mdDocSafe(p && p.md);
+        let html;
+        try {
+          switch (p.key) {
+            case 'time': html = this.renderTimePart(p); break;
+            case 'scene': html = this.renderScenePart(p); break;
+            case 'map': html = this.renderMapPart(p); break;
+            case 'cast': html = this.renderCastPart(p); break;
+            case 'schedule': html = this.renderSchedulePart(p); break;
+            case 'explore': html = this.renderExplorePart(p); break;
+            case 'aside': html = this.renderAsidePart(p); break;
+            case 'mind': html = this.renderMindPart(p); break;
+            default: html = this.mdDocSafe(p.md); break;
+          }
+        } catch (err) {
+          try { console.error('[part-render]', p.key, err); } catch (e2) {}
+          html = this.mdDocSafe(p.md);   // 分区渲染失败 → 整块降级为纯文本文档，绝不让白屏吞掉剧情
+        }
+        return (typeof html === 'string') ? html : this.mdDocSafe(p.md);
+      },
+      /* mdDoc 的安全包装：解析/渲染过程异常时返回原始文本（HTML转义），保证卡片永不空白 */
+      mdDocSafe(text) {
+        try { return this.mdDoc(text); } catch (err) {
+          try { console.error('[md-doc]', err); } catch (e2) {}
+          return '<div class="md-doc"><div class="md-p">' + String(text == null ? '' : text)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div></div>';
         }
       },
       /* 去掉引用块/粗斜体/加粗装饰，得到纯文本行（新旧格式通用） */
@@ -2387,7 +2415,17 @@
   });
 
   app.config.errorHandler = (err, inst, info) => {
-    try { window.__VUE_ERR = { msg: String(err && err.message), info: String(info), comp: inst && inst.type && (inst.type.name || (inst.type.__name)) || '' }; } catch (e2) {}
+    try {
+      const rec = { msg: String(err && err.message), info: String(info), comp: inst && inst.type && (inst.type.name || (inst.type.__name)) || '', ts: Date.now() };
+      window.__VUE_ERR = rec;
+      /* 持久记录最近一次渲染错误：即便用户无法复现白屏，下次打开也能从中定位是哪条消息/哪个分区出错 */
+      try {
+        const arr = [];
+        try { const prev = JSON.parse(localStorage.getItem('paperworld.lasterr') || '[]'); if (Array.isArray(prev)) arr.push(...prev); } catch (e3) {}
+        arr.push(rec);
+        localStorage.setItem('paperworld.lasterr', JSON.stringify(arr.slice(-20)));
+      } catch (e4) {}
+    } catch (e2) {}
     console.error('[vue-err]', err, info, inst);
   };
   console.log('[纸上人间] build', PW.BUILD);
