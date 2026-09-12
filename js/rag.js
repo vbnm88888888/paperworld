@@ -46,6 +46,7 @@ window.PW = window.PW || {};
     tf.forEach((_, t) => idx.df.set(t, (idx.df.get(t) || 0) + 1));
   }
   function removeFromIndex(idx, id) {
+    if (!idx) return;
     const i = idx.docs.findIndex(d => d.id === id);
     if (i < 0) return;
     const doc = idx.docs[i];
@@ -54,6 +55,8 @@ window.PW = window.PW || {};
     idx.docs.splice(i, 1);
     idx.avgLen = idx.n ? idx.docs.reduce((s, d) => s + d.len, 0) / idx.n : 0;
   }
+  /* 整故事索引失效（清空记忆/换故事重载时调用，防止已删记忆仍可被检索） */
+  function dropIndex(storyId) { indexes.delete(storyId); }
 
   function searchBM25(idx, query, topK) {
     const q = tokenize(query);
@@ -207,7 +210,7 @@ window.PW = window.PW || {};
   }
 
   window.PW.Rag = {
-    tokenize, ensureIndex, buildIndex, addToIndex, removeFromIndex, searchBM25,
+    tokenize, ensureIndex, buildIndex, addToIndex, removeFromIndex, dropIndex, searchBM25,
     ensureEmbedder, embedProgress, embedTexts, reindexSemantic, embedRecords, search,
     isSemanticReady: () => !!sem.pipe
   };

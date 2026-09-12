@@ -15,7 +15,10 @@ window.PW = window.PW || {};
   function loadSettings() {
     try {
       const s = JSON.parse(localStorage.getItem(SKEY) || '{}');
-      return Object.assign({}, PW.DEFAULT_SETTINGS, s);
+      const out = Object.assign({}, PW.DEFAULT_SETTINGS, s);
+      /* 官方已将 deepseek-v4-flash 由 DeepSeek-V4.1-Flash 接管并启用新名 deepseek-flash，旧名自动迁移 */
+      if (out.model === 'deepseek-v4-flash') out.model = 'deepseek-flash';
+      return out;
     } catch (e) { return Object.assign({}, PW.DEFAULT_SETTINGS); }
   }
   function saveSettings(s) {
@@ -134,7 +137,8 @@ window.PW = window.PW || {};
   function restoreSnapshot(story, snapId) {
     const snap = story.snapshots.find(s => s.id === snapId);
     if (!snap) return false;
-    const d = JSON.parse(snap.data);
+    let d;
+    try { d = JSON.parse(snap.data); } catch (e) { console.warn('snapshot parse fail', e); return false; }
     story.chat = d.chat; story.npcs = d.npcs; story.phone = d.phone; story.worldview = d.worldview;
     story.updatedAt = Date.now();
     return true;

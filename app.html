@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260906-f';</script>
+  <script>window.__HTML_BUILD__='20260912-b';</script>
   <!-- build 20260906-f · 独立入口页：绕开对 index.html 的顽固缓存，请收藏本页 -->
   <meta http-equiv="Cache-Control" content="no-store">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
@@ -12,13 +12,13 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon.svg">
-  <link rel="stylesheet" href="css/base.css?v=23">
-  <link rel="stylesheet" href="css/shelf.css?v=23">
-  <link rel="stylesheet" href="css/story.css?v=23">
-  <link rel="stylesheet" href="css/npc.css?v=23">
-  <link rel="stylesheet" href="css/editor.css?v=23">
-  <link rel="stylesheet" href="css/phone.css?v=23">
-  <script src="js/vendor/vue.global.prod.js?v=23"></script>
+  <link rel="stylesheet" href="css/base.css?v=25">
+  <link rel="stylesheet" href="css/shelf.css?v=25">
+  <link rel="stylesheet" href="css/story.css?v=25">
+  <link rel="stylesheet" href="css/npc.css?v=25">
+  <link rel="stylesheet" href="css/editor.css?v=25">
+  <link rel="stylesheet" href="css/phone.css?v=25">
+  <script src="js/vendor/vue.global.prod.js?v=25"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -863,11 +863,28 @@
           <div class="s-label"><b>接口地址</b><span>默认官方直连；被拦截可换 OpenAI 兼容中转</span></div>
           <input class="inp s-ctrl" style="width:190px" v-model="settings.apiBase" placeholder="https://api.deepseek.com">
         </div>
-        <div class="set-row">
-          <div class="s-label"><b>模型</b></div>
-          <select class="inp s-ctrl" style="width:auto" v-model="settings.model">
-            <option v-for="m in allModels" :key="m.id" :value="m.id">{{ m.name }}</option>
-          </select>
+        <div class="set-row" style="flex-direction:column;align-items:stretch">
+          <div class="s-label" style="margin-bottom:6px"><b>模型</b>
+            <span v-if="settings.remoteModelsAt">{{ (settings.remoteModels||[]).length }} 个线上模型 · 拉取于 {{ fmtRel(settings.remoteModelsAt) }}，超过一天会自动刷新</span>
+            <span v-else>点「刷新」从 DeepSeek 实时拉取最新模型列表，官方上新无需更新APP</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="inp s-ctrl" style="flex:1;width:auto" v-model="settings.model">
+              <optgroup v-if="allModels.missing.length" label="⚠️ 当前选择">
+                <option v-for="m in allModels.missing" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </optgroup>
+              <optgroup v-if="allModels.remote.length" label="🌐 线上模型（API 实时）">
+                <option v-for="m in allModels.remote" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </optgroup>
+              <optgroup label="内置列表">
+                <option v-for="m in allModels.builtin" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </optgroup>
+              <optgroup v-if="allModels.custom.length" label="自定义">
+                <option v-for="m in allModels.custom" :key="m.id" :value="m.id">{{ m.name }}</option>
+              </optgroup>
+            </select>
+            <button class="btn sm" style="white-space:nowrap" :disabled="modelRefreshing" @click="refreshModels(true)">{{ modelRefreshing ? '拉取中…' : '↻ 刷新' }}</button>
+          </div>
         </div>
         <div class="set-row" style="flex-direction:column;align-items:stretch">
           <div class="s-label" style="margin-bottom:6px"><b>自定义模型 ID</b><span>官方出新模型或中转站的模型名，直接添加即可</span></div>
@@ -1323,16 +1340,16 @@
   </div>
 </div>
 
-<script src="js/config.js?v=23"></script>
-<script src="js/templates.js?v=23"></script>
-<script src="js/store.js?v=23"></script>
-<script src="js/api.js?v=23"></script>
-<script src="js/rag.js?v=23"></script>
-<script src="js/prompts.js?v=23"></script>
-<script src="js/avatars.js?v=23"></script>
-<script src="js/affinity.js?v=23"></script>
-<script src="js/randomnpc.js?v=23"></script>
-<script src="js/phone.js?v=23"></script>
-<script src="js/app.js?v=23"></script>
+<script src="js/config.js?v=25"></script>
+<script src="js/templates.js?v=25"></script>
+<script src="js/store.js?v=25"></script>
+<script src="js/api.js?v=25"></script>
+<script src="js/rag.js?v=25"></script>
+<script src="js/prompts.js?v=25"></script>
+<script src="js/avatars.js?v=25"></script>
+<script src="js/affinity.js?v=25"></script>
+<script src="js/randomnpc.js?v=25"></script>
+<script src="js/phone.js?v=25"></script>
+<script src="js/app.js?v=25"></script>
 </body>
 </html>

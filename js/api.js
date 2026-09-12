@@ -7,10 +7,38 @@ window.PW = window.PW || {};
     if (!/\/v\d+$/.test(b)) b += '/v1';
     return b + '/chat/completions';
   }
+  /* 模型列表端点：GET base + /models（OpenAI兼容） */
+  function modelsEndpoint(base) {
+    let b = (base || PW.CONFIG.DEFAULT_API_BASE).trim().replace(/\/+$/, '');
+    if (!/\/v\d+$/.test(b)) b += '/v1';
+    return b + '/models';
+  }
+
+  /**
+   * 实时拉取该 Key 可用的模型列表（DeepSeek 上新后无需更新APP，刷新即可选到）
+   * @returns {string[]} 模型ID数组，如 ['deepseek-flash','deepseek-v4-pro']
+   */
+  async function listModels() {
+    const s = PW.App.settings;
+    if (!s.apiKey) {
+      const e = new Error('还没有配置 API Key'); e.code = 'NO_KEY'; throw e;
+    }
+    const res = await fetch(modelsEndpoint(s.apiBase), {
+      headers: { 'Authorization': 'Bearer ' + s.apiKey }
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      const e = new Error(errHint(res.status, t)); e.code = 'HTTP_' + res.status; throw e;
+    }
+    const data = await res.json();
+    const arr = ((data && data.data) || []).map(m => m && m.id).filter(Boolean);
+    return arr;
+  }
 
   function errHint(status, bodyText) {
     if (status === 401) return 'API Key 无效或已过期，请到「设置」检查 Key';
     if (status === 402) return '账户余额不足，请到 DeepSeek 平台充值';
+    if (status === 404) return '接口不存在：若是中转地址，可能不支持模型列表接口，不影响对话功能';
     if (status === 422) return '请求参数错误（多为主键/上下文超限），可尝试清空部分剧情或减小记忆层数';
     if (status === 429) return '请求过于频繁（限流），稍等几秒再试';
     if (status >= 500) return 'DeepSeek 服务器开小差了，请稍后重试';
@@ -70,7 +98,12 @@ window.PW = window.PW || {};
         });
         if (res.ok) { lastErr = null; break; }
         const t = await res.text().catch(() => '');
-        if (res.status === 429 || res.status >= 500) { lastErr = new Error(errHint(res.status, t)); await new Promise(r => setTimeout(r, 900)); continue; }
+        if (res.status === 429 || res.status >= 500) {
+          lastErr = new Error(errHint(res.status, t));
+          lastErr.code = 'HTTP_' + res.status;   /* 重试耗尽后按真实HTTP错误抛出，而不是误报成网络错误 */
+          await new Promise(r => setTimeout(r, 900));
+          continue;
+        }
         const e = new Error(errHint(res.status, t)); e.code = 'HTTP_' + res.status; throw e;
       } catch (err) {
         if (err.name === 'AbortError') throw err;
@@ -117,5 +150,5 @@ window.PW = window.PW || {};
     return { content, usage };
   }
 
-  window.PW.Api = { endpoint, chat, errHint };
+  window.PW.Api = { endpoint, modelsEndpoint, listModels, chat, errHint };
 })();

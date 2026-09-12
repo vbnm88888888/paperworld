@@ -2,7 +2,7 @@
 window.PW = window.PW || {};
 
 /* 构建版本：界面可见（书架底部/设置页），用于确认手机加载的不是旧缓存 */
-PW.BUILD = '20260906-g';
+PW.BUILD = '20260912-b';
 
 /* 分区解析器版本：改动解析逻辑时递增。旧消息的缓存分区会按此版本自动重析迁移 */
 PW.PARTS_VER = 'c3';
@@ -13,13 +13,22 @@ PW.CONFIG = {
 
   DEFAULT_API_BASE: 'https://api.deepseek.com',
   MODELS: [
-    { id: 'deepseek-v4-flash', name: 'DeepSeek-V4 Flash · 默认 · 快' },
+    { id: 'deepseek-flash', name: 'DeepSeek-V4.1 Flash · 默认 · 快 · 1M上下文' },
     { id: 'deepseek-v4-pro', name: 'DeepSeek-V4 Pro · 更强' },
-    { id: 'deepseek-v4-flash-vision-exp', name: 'V4 Flash Vision · 实验版(识图)' },
+    { id: 'deepseek-v4-flash', name: 'DeepSeek-V4 Flash · 旧名(已由V4.1 Flash服务)' },
+    { id: 'deepseek-v4-flash-vision-exp', name: 'V4 Flash Vision · 旧名(已由V4.1 Flash服务·识图)' },
     { id: 'deepseek-chat', name: 'deepseek-chat · 旧版兼容' },
     { id: 'deepseek-reasoner', name: 'deepseek-reasoner · 旧版R1' }
   ],
   DEFAULT_TEMPERATURE: 1.1,
+
+  /* 线上模型ID → 显示名（仅美化用；列表本体来自 GET /models 实时拉取） */
+  MODEL_ALIASES: {
+    'deepseek-flash': 'DeepSeek-V4.1 Flash',
+    'deepseek-v4-pro': 'DeepSeek-V4 Pro',
+    'deepseek-chat': 'deepseek-chat',
+    'deepseek-reasoner': 'deepseek-reasoner'
+  },
 
   // ---- 四层记忆参数 ----
   TOP_K: 6,            // L3 RAG 每次检索条数
@@ -40,7 +49,7 @@ PW.CONFIG = {
 PW.DEFAULT_SETTINGS = {
   apiKey: '',
   apiBase: PW.CONFIG.DEFAULT_API_BASE,
-  model: 'deepseek-v4-flash',
+  model: 'deepseek-flash',
   temperature: PW.CONFIG.DEFAULT_TEMPERATURE,
   theme: 'auto',                 // auto | light | dark
   memoryMode: 'bm25',            // bm25 | semantic
@@ -49,6 +58,8 @@ PW.DEFAULT_SETTINGS = {
   ctxMax: 20,                    // 上下文token上限(千)：估算超过则压缩最旧部分
   ctxMin: 14,                    // 上下文token下限(千)：压缩到低于此值为止
   customModels: [],              // 用户自定义模型ID
+  remoteModels: [],              // 从 GET /models 实时拉取的线上模型（自动刷新）
+  remoteModelsAt: 0,             // 上次拉取时间戳
   plotFont: 17,                  // 剧情字号 px
   plotFontFamily: 'default',     // 正文字体：default|song|kai|yuan|hei
   plotColor: '',                 // 正文字色：留空=跟随主题

@@ -100,6 +100,7 @@
         toastShow: false, toastText: '', toastIcon: '✨', _toastTimer: null,
         err: { show: false, title: '', detail: '' },
         affFxList: [],
+        modelRefreshing: false,   // 线上模型列表拉取中
 
         /* 娱乐圈演出层 */
         entFx: null,           // 晋升庆典全屏特效 {name, tier, key}
@@ -112,9 +113,22 @@
         return [{ key: 'blank', name: '自由自定', emoji: '📖' }];
       },
       modelList() { return PW.CONFIG.MODELS; },
+      /* 模型三组：线上实时（GET /models）> 内置兜底 > 用户自定义；均已去重 */
       allModels() {
-        const custom = (this.settings.customModels || []).map(id => ({ id, name: id + ' · 自定义' }));
-        return PW.CONFIG.MODELS.concat(custom);
+        const alias = PW.MODEL_ALIASES || {};
+        const remote = (this.settings.remoteModels || []).map(id => ({
+          id, name: alias[id] ? alias[id] + '（' + id + '）' : id
+        }));
+        const inRemote = id => remote.some(r => r.id === id);
+        const builtin = PW.CONFIG.MODELS.filter(m => !inRemote(m.id));
+        const custom = (this.settings.customModels || [])
+          .filter(id => !inRemote(id) && !PW.CONFIG.MODELS.some(m => m.id === id))
+          .map(id => ({ id, name: id + ' · 自定义' }));
+        /* 当前选中的模型不在任何组里（可能已下线）→ 单独列出，避免下拉框显示空白 */
+        const cur = this.settings.model;
+        const missing = cur && ![...remote, ...builtin, ...custom].some(m => m.id === cur)
+          ? [{ id: cur, name: cur + '（列表外·可能已下线）' }] : [];
+        return { remote, builtin, custom, missing };
       },
       sortedStories() { return this.stories.slice().sort((a, b) => b.updatedAt - a.updatedAt); },
       tabs() {
@@ -246,7 +260,9 @@
 
     watch: {
       settings: { deep: true, handler() { PW.Store.saveSettings(this.settings); this.applyTheme(); } },
-      stories: { deep: true, handler() { PW.Store.saveStoriesSoon(this.stories); } }
+      stories: { deep: true, handler() { PW.Store.saveStoriesSoon(this.stories); } },
+      /* 打开设置页时自动拉取线上模型列表（超过24小时才刷，失败静默不影响使用） */
+      showSettings(v) { if (v) this.maybeRefreshModels(); }
     },
 
     created() {
@@ -482,7 +498,35 @@
       },
       removeCustomModel(id) {
         this.settings.customModels = this.settings.customModels.filter(m => m !== id);
-        if (this.settings.model === id) this.settings.model = 'deepseek-v4-flash';
+        if (this.settings.model === id) this.settings.model = 'deepseek-flash';
+      },
+      /* ---------- 线上模型列表（DeepSeek 上新后刷新即可选，无需更新APP） ---------- */
+      async maybeRefreshModels() {
+        const at = this.settings.remoteModelsAt || 0;
+        if (Date.now() - at < 24 * 3600e3) return;
+        this.refreshModels(false);
+      },
+      async refreshModels(manual) {
+        if (this.modelRefreshing) return;
+        if (!this.settings.apiKey) {
+          if (manual) this.toast('先填 API Key，再刷新模型列表', '🔑');
+          return;
+        }
+        this.modelRefreshing = true;
+        try {
+          const ids = await PW.Api.listModels();
+          if (!ids.length) throw new Error('API 返回的模型列表为空');
+          this.settings.remoteModels = ids;
+          this.settings.remoteModelsAt = Date.now();
+          if (manual) {
+            this.toast('已拉取 ' + ids.length + ' 个线上模型', '🛰️');
+            if (this.settings.model && ids.indexOf(this.settings.model) < 0) {
+              this.toast('当前模型不在最新列表里，可在下拉框换一个', '⚠️');
+            }
+          }
+        } catch (e) {
+          if (manual) this.showError(e);   // 自动拉取失败静默，内置列表兜底
+        } finally { this.modelRefreshing = false; }
       },
 
       /* ---------- 提示 ---------- */
@@ -926,12 +970,14 @@
         await PW.Store.memDelete(r.id);
         const i = this.mem.records.findIndex(x => x.id === r.id);
         if (i >= 0) this.mem.records.splice(i, 1);
+        PW.Rag.removeFromIndex(PW.Rag.ensureIndex(this.story.id, this.mem.records), r.id);
         if (this.mem.hits) this.mem.hits = this.mem.hits.filter(x => x.id !== r.id);
         this.toast('该条记忆已抹去', '🗑');
       },
       clearMemAll() {
         this.confirmBoxOpen('清空全部记忆？', '本故事的长期记忆与前情提要都会被清空，剧情消息仍保留。', async () => {
           await PW.Store.memClear(this.story.id);
+          PW.Rag.dropIndex(this.story.id);   // 同步失效内存索引，防止已删记忆仍被检索
           this.mem.records = []; this.mem.hits = null;
           this.story.chat.summary = '';
           this.story.chat.summarizedUntil = this.story.chat.messages.length;
@@ -1814,13 +1860,21 @@
         if (this.busy) return;
         const msgs = this.story.chat.messages;
         if (msgs.length && msgs[msgs.length - 1].kind === 'ai') { msgs.pop(); }
+        this.clampSummarized();
         this.streamReply(null);
       },
       regenerateFrom(m) {
         if (this.busy) return;
         const i = this.story.chat.messages.findIndex(x => x.id === m.id);
         if (i >= 0) this.story.chat.messages.splice(i);
+        this.clampSummarized();
         this.streamReply(null);
+      },
+      /* 删除消息后收敛压缩游标：summarizedUntil 超过消息数时，上下文估算恒为0、
+         build 的历史窗口也会错位，导致压缩失效、最近剧情丢失 */
+      clampSummarized() {
+        const c = this.story.chat;
+        if ((c.summarizedUntil || 0) > c.messages.length) c.summarizedUntil = c.messages.length;
       },
 
       async streamReply(userText) {
@@ -1995,15 +2049,14 @@
         if (!max) return;
         const target = min && min < max ? min : max;
         let est = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
-        let compressed = 0, guard = 0;
+        let guard = 0;
         while (est > max && guard < 20) {
           const done = await this.doSummary(target);
           if (!done) break;
-          compressed++;
           est = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
           guard++;
         }
-        if (compressed) this.toast('剧情过长：已将最旧部分压缩进前情提要，防止上下文超限', '🧠');
+        /* 压缩在后台静默完成，不再弹窗打扰 */
         this.lastCtxEst = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
       },
       async resummarize() {
@@ -2019,13 +2072,16 @@
           { icon: '📋', label: '复制', fn: () => this.copyMsg(m) },
           { icon: '✏️', label: '编辑', fn: () => { this.msgEdit = { open: true, text: m.text, msg: m, target: 'msg' }; } }
         ];
-        if (m.kind === 'ai') {
-          items.push({ icon: '↻', label: '重掷本条', fn: () => this.regenerateFrom(m) });
+        const msgs = this.story.chat.messages;
+        /* 「重掷本条」仅对最新一条AI消息生效（只重掷该条）；历史中间的消息走下面的"删掉它及之后" */
+        if (m.kind === 'ai' && msgs[msgs.length - 1] === m) {
+          items.push({ icon: '↻', label: '重掷本条', fn: () => this.reroll() });
         }
         items.push({ icon: '✂️', label: '删掉它及之后，重新发展', fn: () => this.regenerateFrom(m) });
         items.push({ icon: '🗑', label: '删除这条', danger: true, fn: () => {
           const i = this.story.chat.messages.findIndex(x => x.id === m.id);
           if (i >= 0) this.story.chat.messages.splice(i, 1);
+          this.clampSummarized();
         } });
         this.sheet = { open: true, title: '', preview: (m.text || '').slice(0, 90), items };
       },
@@ -2064,7 +2120,7 @@
       },
       restoreSnap(s) {
         this.confirmBoxOpen('回溯到这个存档？', `剧情将回到「${s.label}」，之后的内容不会删除记忆库，但消息流会被替换。`, () => {
-          PW.Store.restoreSnapshot(this.story, s.id);
+          if (!PW.Store.restoreSnapshot(this.story, s.id)) { this.toast('存档数据损坏，无法回溯', '⚠️'); return; }
           this._aiCache.clear();
           this.snapshotOpen = false;
           this.toast('已回溯', '⏪');
