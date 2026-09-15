@@ -15,20 +15,12 @@ window.PW = window.PW || {};
     return (story && Array.isArray(story.layout) && story.layout.length) ? story.layout : PW.DEFAULT_LAYOUT;
   }
 
-  /* ---------- 九段式输出格式块（格式代码固定 + 内容提示词可编辑 + 游戏状态注入） ---------- */
+  /* ---------- 九段式输出格式块（格式代码固定 + 内容提示词可编辑） ----------
+     注意：本块必须保持轮与轮之间字节稳定（不含任何易变状态），
+     稳定内容放系统提示词前部 → 命中 DeepSeek 上下文缓存，缓存命中部分输入费用约为未命中的 1/10 */
   function nineBlock(story) {
     const layout = layoutOf(story);
-    const st = story.sessionState || {};
     const lines = [];
-    /* 游戏状态机：时间/场景/日程连续性 */
-    if (st.time || st.scene || st.day || (st.explored && st.explored.length) || (st.schedule && st.schedule.trim())) {
-      lines.push('【当前游戏状态（必须保持连续，严禁凭空重置或跳变；时间推进见"时间"分区规则）】');
-      if (st.time) lines.push('· 当前时间：' + st.time);
-      if (st.scene) lines.push('· 当前场景：' + st.scene);
-      if (st.day) lines.push('· 剧情第 ' + st.day + ' 天');
-      if (st.explored && st.explored.length) lines.push('· 已探索区域：' + st.explored.join('、'));
-      if (st.schedule && st.schedule.trim()) lines.push('· 上一日日程：' + st.schedule.replace(/\s+/g, ' ').slice(0, 120));
-    }
     let n = 0;
     layout.forEach(sec => {
       if (sec.enabled === false) return;
@@ -58,6 +50,29 @@ window.PW = window.PW || {};
       + '5. 九段缺一不可：时间、场景、地图、人员、正文、日程、探索、旁白、心理，一段都不能少；输出前数一遍，不够九段立即补全后再结束回复。';
   }
 
+  /* ---------- 易变状态块（每轮变化，固定追加在系统提示词最末尾，保证前缀字节稳定命中缓存） ---------- */
+  function stateBlock(story) {
+    const st = story.sessionState || {};
+    if (!(st.time || st.scene || st.day || (st.explored && st.explored.length) || (st.schedule && st.schedule.trim()))) return '';
+    const lines = ['【当前游戏状态（必须保持连续，严禁凭空重置或跳变；时间推进见"时间"分区规则）】'];
+    if (st.time) lines.push('· 当前时间：' + st.time);
+    if (st.scene) lines.push('· 当前场景：' + st.scene);
+    if (st.day) lines.push('· 剧情第 ' + st.day + ' 天');
+    if (st.explored && st.explored.length) lines.push('· 已探索区域：' + st.explored.join('、'));
+    if (st.schedule && st.schedule.trim()) lines.push('· 上一日日程：' + st.schedule.replace(/\s+/g, ' ').slice(0, 120));
+    return lines.join(NL);
+  }
+  /* NPC 实时状态（好感度/状态每轮都变 → 从稳定区剥离，放易变尾部） */
+  function npcStatusBlock(story) {
+    const npcs = (story.npcs || []).filter(n => n.present !== false);
+    if (!npcs.length) return '';
+    const lines = ['【NPC当前状态速览（好感度为界面实时值，需保持连贯；好感变化须贴合性格与剧情因果，单次不超过±10）】'];
+    npcs.forEach(n => {
+      lines.push('- ' + n.name + '：好感度 ' + (n.affinity == null ? 50 : n.affinity) + '/100' + (n.state ? '；当前状态：' + n.state : ''));
+    });
+    return lines.join(NL);
+  }
+
   /* ---------- 娱乐圈模式：资本视角规则（仿易次元《玩转娱圈》） ---------- */
   function entBlock(story) {
     const pName = (story.player && story.player.name) || '玩家';
@@ -82,22 +97,24 @@ window.PW = window.PW || {};
     const tpl = PW.TEMPLATES[story.genreKey];
     const styleObj = PW.STYLES.find(s => s.id === story.settings.styleId);
 
-    /* 自定义核心指令：替换默认 GM 规则 */
+    /* 自定义核心指令：替换默认 GM 规则。
+       缓存友好排序：稳定区在前（核心指令/九段式格式/附加协议/娱乐圈规则），易变区在后（角色速览/游戏状态） */
     if (story.useCoreInstruction && story.coreInstruction && story.coreInstruction.trim()) {
       let sys = story.coreInstruction.trim();
-      /* 附加当前角色状态速览，保证好感度/人员与界面一致 */
-      const roster = rosterBlock(story);
-      if (roster) sys += '\n\n' + roster;
+      if (story.useNineFormat) sys += NL + NL + nineBlock(story) + NL + NL + nineProtocol();
       sys += '\n\n【系统附加协议（最高优先级，不可违反）】\n'
         + '1. 用中文回复。\n'
         + '2. 绝不代替玩家角色做决定，绝不描写玩家角色未声明的行动与心理；其他角色只对玩家已声明的行为做出反应。\n'
         + '3. 若有角色好感或状态变化，可在回复末尾另起一行输出隐藏标记（系统自动剔除，玩家不可见，不要在正文解释）：[[AFF:NPC名:+3]] 或 [[AFF:NPC名:-2]]、[[STATE:NPC名:状态短语]]。\n';
-      if (story.settings.entMode) { sys += '\n\n' + entBlock(story); }
-      if (story.useNineFormat) {
-        sys += NL + NL + nineBlock(story) + NL + NL + nineProtocol();
-        return sys;
+      if (!story.useNineFormat) {
+        sys += '5. 好感度与状态变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情，不可无脑上升；单次变化幅度不超过±10。\n';
       }
-      sys += '5. 好感度与状态变化必须符合逻辑：严格贴合NPC性格、经历与当前剧情，不可无脑上升；单次变化幅度不超过±10。\n';
+      if (story.settings.entMode) { sys += '\n\n' + entBlock(story); }
+      /* ---- 易变区（每轮变化，放最末尾）---- */
+      const roster = rosterBlock(story);   // 附加当前角色状态速览，保证好感度/人员与界面一致
+      if (roster) sys += '\n\n' + roster;
+      const state = stateBlock(story);
+      if (state) sys += '\n\n' + state;
       return sys;
     }
 
@@ -105,13 +122,13 @@ window.PW = window.PW || {};
       ? '叙事视角：第一人称——旁白以玩家角色"我"的口吻描述其行动与感官（但不代玩家做决定）'
       : '叙事视角：第三人称——旁白客观描述玩家角色与世界的互动（不代玩家做决定）';
 
+    /* NPC 卡（稳定区）：只放不变的身份/性格设定；每轮变化的好感度/状态放易变尾部 npcStatusBlock */
     let npcCards = '';
     (story.npcs || []).filter(n => n.present !== false).forEach(n => {
       npcCards += `◆ ${n.name}（${n.gender || '?'}，${n.age || '?'}岁）｜身份：${n.identity || '未知'}\n`
         + `  性格：${n.personality || '—'}｜外貌：${n.appearance || '—'}\n`
-        + `  说话风格：${n.speech || '—'}｜与玩家关系：${n.relation || '—'}｜好感度：${n.affinity == null ? 50 : n.affinity}/100\n`
+        + `  说话风格：${n.speech || '—'}｜与玩家关系：${n.relation || '—'}\n`
         + (n.tier ? `  艺人段位：${n.tier}\n` : '')
-        + (n.state ? `  当前状态：${n.state}\n` : '')
         + (n.secret ? `  隐藏秘密（仅你知晓，需铺垫才能揭示，绝不主动和盘托出）：${n.secret}\n` : '');
     });
     if (!npcCards) npcCards = '（暂无在场NPC，若剧情需要可引入路人，或提示玩家在NPC页添加）';
@@ -140,18 +157,7 @@ ${npcCards}`;
 
     if (story.settings.entMode) { sys += '\n\n' + entBlock(story); }
 
-    /* L3 RAG 检索记忆 */
-    if (layers.memories && layers.memories.length) {
-      sys += `\n【记忆回响】以下是与此刻情境相关的过往剧情片段（来自更早的章节，仅作回忆参考，不要复述）：
-${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0, 160) + '…' : m.text}`).join('\n')}`;
-    }
-
-    /* L2 溢出压缩：仅当剧情全量原文超过上下文上限时,最旧部分被压缩进这里 */
-    if (layers.summary) {
-      sys += `\n【前情提要】（剧情过长时被压缩的最旧部分）\n${layers.summary}`;
-    }
-
-    /* 输出格式协议 */
+    /* 输出格式协议（稳定区：格式规则轮与轮之间不变） */
     if (story.useNineFormat) {
       sys += NL + NL + nineBlock(story) + NL + NL + nineProtocol();
     } else {
@@ -168,6 +174,23 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
 7. 手机剧情（若启用）：NPC发消息、朋友圈动态、微博等用标记：【微信|NPC名|内容】【朋友圈|NPC名|动态内容】，系统会路由到手机界面。
 8. 保持NPC言行与其性格、身份、秘密一致；重要伏笔可以埋设，长线剧情要能接得上记忆。`;
     }
+
+    /* ---- 易变区（每轮变化，固定放系统提示词最末尾）----
+       稳定内容在前、易变内容在后：轮与轮之间 system 前缀字节保持一致，
+       命中 DeepSeek 上下文缓存（缓存命中部分输入费用约为未命中的 1/10） */
+    const tail = [];
+    const npcStatus = npcStatusBlock(story);
+    if (npcStatus) tail.push(npcStatus);
+    const state = stateBlock(story);
+    if (state) tail.push(state);
+    if (layers.memories && layers.memories.length) {
+      tail.push('【记忆回响】以下是与此刻情境相关的过往剧情片段（来自更早的章节，仅作回忆参考，不要复述）：\n'
+        + layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0, 160) + '…' : m.text}`).join('\n'));
+    }
+    if (layers.summary) {
+      tail.push('【前情提要】（剧情过长时被压缩的最旧部分）\n' + layers.summary);
+    }
+    if (tail.length) sys += NL + NL + tail.join(NL + NL);
     return sys;
   }
 
@@ -186,17 +209,70 @@ ${layers.memories.map(m => `[${m.label}] ${m.text.length > 160 ? m.text.slice(0,
     return out.trim();
   }
 
+  /* ---------- 九段式历史瘦身 ----------
+     早期AI历史消息只保留 时间/场景/正文/心理 段，丢弃 地图/人员动向/日程/探索/旁白
+     （这些分区每轮高度重复，最新一轮里已含完整信息），大幅降低每轮输入token。
+     段头匹配「N.【标题】」；标题优先按关键词判断，其次按布局位置兜底；识别不出段落结构则原样返回。 */
+  const NINE_KEEP_TITLES = /(时间|场景|正文|心理)/;
+  const NINE_DROP_TITLES = /(地图|人员|动向|日程|探索|旁白)/;
+  function slimNineRaw(story, raw) {
+    const text = String(raw || '');
+    if (text.indexOf('【') < 0) return text;
+    const layout = layoutOf(story).filter(s => s.enabled !== false);
+    const KEEP_KEYS = { time: 1, scene: 1, story: 1, mind: 1 };
+    const keepPos = {};
+    let n = 0;
+    layout.forEach(sec => { n++; if (KEEP_KEYS[sec.key]) keepPos[n] = true; });
+    const headRe = /^\s*(\d{1,2})\s*[.、．]\s*【(.+?)】/;
+    const lines = text.split('\n');
+    const out = [];
+    let curKeep = null;   // null=首个段头之前的原文头部（保留）
+    let sawSection = false, keptAny = false;
+    for (const ln of lines) {
+      const m = ln.match(headRe);
+      if (m) {
+        sawSection = true;
+        const pos = parseInt(m[1], 10);
+        const title = m[2] || '';
+        if (NINE_DROP_TITLES.test(title)) curKeep = false;
+        else if (NINE_KEEP_TITLES.test(title)) curKeep = true;
+        else curKeep = !!keepPos[pos];
+        if (curKeep) { out.push(ln); keptAny = true; }
+        continue;
+      }
+      if (curKeep !== false) out.push(ln);
+    }
+    if (!sawSection || !keptAny) return text;
+    return out.join('\n');
+  }
+
   /* ---------- L1：最近消息 → 对话历史 ---------- */
   function historyMessages(story, fromIndex) {
-    const msgs = story.chat.messages.slice(fromIndex || 0);
-    return msgs.filter(m => m.text && m.text.trim()).map(m => {
-      if (m.kind === 'ai') return { role: 'assistant', content: m.raw || m.text };
-      if (m.kind === 'me') return { role: 'user', content: m.text };
-      if (m.kind === 'ooc') return { role: 'user', content: '（OOC：' + m.text + '）' };
-      if (m.kind === 'phone') return { role: 'user', content: '（系统旁注：' + m.text + '）' };
-      // ctrl 指令
-      return { role: 'user', content: '（GM指令：' + m.text + '）' };
-    });
+    const all = story.chat.messages;
+    const start = fromIndex || 0;
+    /* 瘦身开关：九段式开启且设置未关闭时生效；最近 KEEP_AI 条 AI 消息保留全量原文 */
+    const slimOn = story.useNineFormat && !(story.settings && story.settings.nineSlim === false);
+    const KEEP_AI = (PW.CONFIG && PW.CONFIG.NINE_HISTORY_KEEP_AI) || 2;
+    let rank = 0;
+    const aiRank = new Map();   // 消息下标 → 从末尾数的AI消息序号（最新=1）
+    for (let i = all.length - 1; i >= 0; i--) {
+      if (all[i].kind === 'ai') { rank++; aiRank.set(i, rank); }
+    }
+    const out = [];
+    for (let i = start; i < all.length; i++) {
+      const m = all[i];
+      if (!m.text || !m.text.trim()) continue;
+      if (m.kind === 'ai') {
+        let content = m.raw || m.text;
+        if (slimOn && (aiRank.get(i) || 0) > KEEP_AI) content = slimNineRaw(story, content);
+        out.push({ role: 'assistant', content });
+      }
+      else if (m.kind === 'me') out.push({ role: 'user', content: m.text });
+      else if (m.kind === 'ooc') out.push({ role: 'user', content: '（OOC：' + m.text + '）' });
+      else if (m.kind === 'phone') out.push({ role: 'user', content: '（系统旁注：' + m.text + '）' });
+      else out.push({ role: 'user', content: '（GM指令：' + m.text + '）' });
+    }
+    return out;
   }
 
   /* 最近剧情原文（替代"前情提要"：直接取最近n条剧情，绕开摘要压缩，保证细节不丢） */

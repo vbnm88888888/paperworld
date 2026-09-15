@@ -2,7 +2,7 @@
 window.PW = window.PW || {};
 
 /* 构建版本：界面可见（书架底部/设置页），用于确认手机加载的不是旧缓存 */
-PW.BUILD = '20260912-b';
+PW.BUILD = '20260915-a';
 
 /* 分区解析器版本：改动解析逻辑时递增。旧消息的缓存分区会按此版本自动重析迁移 */
 PW.PARTS_VER = 'c3';
@@ -43,7 +43,9 @@ PW.CONFIG = {
   EMBED_WEIGHT: 0.65,  // 混合检索中语义分数权重（关键词 0.35）
 
   MAX_AVATAR_PX: 128,  // 上传头像压缩尺寸
-  TOKEN_DIVISOR: 1.6   // 中文 token 粗估：字符数 / 1.6
+  TOKEN_DIVISOR: 1.6,  // 中文 token 粗估：字符数 / 1.6
+
+  NINE_HISTORY_KEEP_AI: 2  // 九段式历史瘦身：最近N条AI回复保留全量九段，更早的只留时间/场景/正文/心理
 };
 
 PW.DEFAULT_SETTINGS = {
@@ -63,6 +65,7 @@ PW.DEFAULT_SETTINGS = {
   plotFont: 17,                  // 剧情字号 px
   plotFontFamily: 'default',     // 正文字体：default|song|kai|yuan|hei
   plotColor: '',                 // 正文字色：留空=跟随主题
+  nineSlim: true,                // 九段式历史瘦身：早期AI历史只保留时间/场景/正文/心理，省token
   bg: { img: '', opacity: 0.35, blur: 0 },  // 自定义背景
   guideSeen: false,
   lastErr: ''
