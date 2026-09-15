@@ -2,7 +2,7 @@
 window.PW = window.PW || {};
 
 /* 构建版本：界面可见（书架底部/设置页），用于确认手机加载的不是旧缓存 */
-PW.BUILD = '20260915-a';
+PW.BUILD = '20260915-b';
 
 /* 分区解析器版本：改动解析逻辑时递增。旧消息的缓存分区会按此版本自动重析迁移 */
 PW.PARTS_VER = 'c3';
@@ -66,6 +66,7 @@ PW.DEFAULT_SETTINGS = {
   plotFontFamily: 'default',     // 正文字体：default|song|kai|yuan|hei
   plotColor: '',                 // 正文字色：留空=跟随主题
   nineSlim: true,                // 九段式历史瘦身：早期AI历史只保留时间/场景/正文/心理，省token
+  sumCooldown: 8,                // 摘要压缩冷却(轮)：上次压缩后N轮内不再自动压缩，0=不限制
   bg: { img: '', opacity: 0.35, blur: 0 },  // 自定义背景
   guideSeen: false,
   lastErr: ''

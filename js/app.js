@@ -1870,11 +1870,31 @@
         this.clampSummarized();
         this.streamReply(null);
       },
-      /* 删除消息后收敛压缩游标：summarizedUntil 超过消息数时，上下文估算恒为0、
+      /* 删除消息后收敛压缩游标：summarizedUntil/lastSumLen 超过消息数时，上下文估算恒为0、
          build 的历史窗口也会错位，导致压缩失效、最近剧情丢失 */
       clampSummarized() {
         const c = this.story.chat;
         if ((c.summarizedUntil || 0) > c.messages.length) c.summarizedUntil = c.messages.length;
+        if ((c.lastSumLen || 0) > c.messages.length) c.lastSumLen = c.messages.length;
+      },
+
+      /* 压缩冷却：上次压缩后 sumCooldown 轮（1轮=1条AI回复）内不再自动压缩。
+         防止"保底区贴着上限"时每轮新增消息挤出保底区 → 每轮都触发一次摘要API调用。
+         冷却期超一点 ctxMax 无害（DeepSeek 上下文 64k）。 */
+      sumCooldownOk() {
+        const story = this.story;
+        if (!story) return true;
+        const cd = this.settings.sumCooldown == null ? 8 : (this.settings.sumCooldown | 0);
+        if (!cd || cd <= 0) return true;            // 0=不限制
+        const msgs = story.chat.messages;
+        const last = story.chat.lastSumLen || 0;
+        if (!last) return true;                      // 从未压缩过 → 无冷却
+        let rounds = 0;
+        for (let i = Math.min(last, msgs.length); i < msgs.length; i++) {
+          if (msgs[i] && msgs[i].kind === 'ai') rounds++;
+          if (rounds >= cd) return true;
+        }
+        return false;
       },
 
       async streamReply(userText) {
@@ -2035,18 +2055,24 @@
           if (content && content.trim().length >= PW.CONFIG.MIN_SUMMARY_LEN) {
             story.chat.summary = content.trim();
             story.chat.summarizedUntil = cut;
+            story.chat.lastSumLen = msgs.length;   // 记录本次压缩位置（供冷却期判定：N轮内不再压缩）
             return true;
           }
           return false;
         } catch (e) { return false; }
         finally { this.summarizing = false; }
       },
-      async watchContext() {
-        /* 每次生成后检查：估算是否超过 ctxMax 上限。超过则把最旧部分压缩进前情提要，直到 ≤ ctxMin。 */
+      async watchContext(force) {
+        /* 每次生成后检查：估算是否超过 ctxMax 上限。超过则把最旧部分压缩进前情提要，直到 ≤ ctxMin。
+           冷却期：上次压缩后 sumCooldown 轮内不再自动压缩（手动检查 force=true 无视冷却） */
         if (!this.story || !this.settings.apiKey) return;
         const max = (this.settings.ctxMax || 0) * 1000;
         const min = (this.settings.ctxMin || 0) * 1000;
         if (!max) return;
+        if (!force && !this.sumCooldownOk()) {
+          this.lastCtxEst = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
+          return;   // 冷却期内：跳过本轮检查，不调用摘要API
+        }
         const target = min && min < max ? min : max;
         let est = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
         let guard = 0;
@@ -2060,7 +2086,7 @@
         this.lastCtxEst = this.ctxEstFrom(this.story.chat.summarizedUntil || 0);
       },
       async resummarize() {
-        await this.watchContext();
+        await this.watchContext(true);   // 手动检查无视冷却期
         if (!this.summarizing) this.toast('已按当前上下文上限检查完毕', '📜');
       },
 

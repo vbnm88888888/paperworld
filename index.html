@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260915-a';</script>
+  <script>window.__HTML_BUILD__='20260915-b';</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0e1320">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -10,13 +10,13 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon.svg">
-  <link rel="stylesheet" href="css/base.css?v=26">
-  <link rel="stylesheet" href="css/shelf.css?v=26">
-  <link rel="stylesheet" href="css/story.css?v=26">
-  <link rel="stylesheet" href="css/npc.css?v=26">
-  <link rel="stylesheet" href="css/editor.css?v=26">
-  <link rel="stylesheet" href="css/phone.css?v=26">
-  <script src="js/vendor/vue.global.prod.js?v=26"></script>
+  <link rel="stylesheet" href="css/base.css?v=27">
+  <link rel="stylesheet" href="css/shelf.css?v=27">
+  <link rel="stylesheet" href="css/story.css?v=27">
+  <link rel="stylesheet" href="css/npc.css?v=27">
+  <link rel="stylesheet" href="css/editor.css?v=27">
+  <link rel="stylesheet" href="css/phone.css?v=27">
+  <script src="js/vendor/vue.global.prod.js?v=27"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -928,6 +928,10 @@
           <div class="s-label"><b>九段式历史瘦身</b><span>早期AI历史只保留时间/场景/正文/心理，大幅省token</span></div>
           <div class="switch" :class="{on: settings.nineSlim}" @click="settings.nineSlim=!settings.nineSlim"></div>
         </div>
+        <div class="set-row">
+          <div class="s-label"><b>压缩冷却 {{ settings.sumCooldown }} 轮</b><span>上次压缩后N轮内不再自动压缩，0=不限制</span></div>
+          <input type="range" min="0" max="20" step="1" v-model.number="settings.sumCooldown" style="width:130px">
+        </div>
       </div>
 
       <div class="set-group">
@@ -1342,16 +1346,16 @@
   </div>
 </div>
 
-<script src="js/config.js?v=26"></script>
-<script src="js/templates.js?v=26"></script>
-<script src="js/store.js?v=26"></script>
-<script src="js/api.js?v=26"></script>
-<script src="js/rag.js?v=26"></script>
-<script src="js/prompts.js?v=26"></script>
-<script src="js/avatars.js?v=26"></script>
-<script src="js/affinity.js?v=26"></script>
-<script src="js/randomnpc.js?v=26"></script>
-<script src="js/phone.js?v=26"></script>
-<script src="js/app.js?v=26"></script>
+<script src="js/config.js?v=27"></script>
+<script src="js/templates.js?v=27"></script>
+<script src="js/store.js?v=27"></script>
+<script src="js/api.js?v=27"></script>
+<script src="js/rag.js?v=27"></script>
+<script src="js/prompts.js?v=27"></script>
+<script src="js/avatars.js?v=27"></script>
+<script src="js/affinity.js?v=27"></script>
+<script src="js/randomnpc.js?v=27"></script>
+<script src="js/phone.js?v=27"></script>
+<script src="js/app.js?v=27"></script>
 </body>
 </html>
