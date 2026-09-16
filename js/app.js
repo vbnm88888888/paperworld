@@ -1461,11 +1461,6 @@
         if (this.busy && this.streamText) return this.streamNinePart(key);
         return this.lastAi ? this.ninePart(this.lastAi, key) : null;
       },
-      /* 缺段自查：本条回复缺少哪些已启用分区（九段缺一不可） */
-      missingParts(m) {
-        if (!(this.story && this.story.useNineFormat) || !m) return [];
-        return this.layoutSections.filter(s => !this.ninePart(m, s.key));
-      },
       /* 流式：指定 key 的分区 */
       streamNinePart(key) {
         return (this.streamNfParts() || []).find(p => p.key === key) || null;
