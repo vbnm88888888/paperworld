@@ -65,6 +65,7 @@
         /* 通用弹层 */
         sheet: { open: false, title: '', preview: '', items: [] },
         confirmBox: { open: false, title: '', text: '', fn: null },
+        trimBox: { open: false, keep: 40, total: 0, cut: 0, unsafe: 0 },
         msgEdit: { open: false, text: '', msg: null, target: 'msg' },
         snapshotOpen: false,
         guide: { open: false, step: 0, key: '' },
@@ -581,6 +582,35 @@
         });
       },
       confirmBoxOpen(title, text, fn) { this.confirmBox = { open: true, title, text, fn }; },
+
+      /* ---------- 剧情瘦身：物理删除旧消息，保留近几轮 ----------
+         卡顿根因：消息列表全量渲染（几百条×markdown+分区重解析），越聊越卡。
+         已压缩进前情提要的旧消息 AI 本来就不看了，物理删除不影响剧情记忆，
+         只让 DOM 和 localStorage 变轻。始终保留第一条（开局白）。 */
+      askTrim() {
+        if (!this.story) return;
+        const msgs = this.story.chat.messages;
+        const sumUntil = this.story.chat.summarizedUntil || 0;
+        const total = msgs.length;
+        if (total <= 12) { this.toast('消息还不多，不需要瘦身', '🧹'); return; }
+        const keep = Math.min(this.trimBox.keep || 40, total);
+        const cut = Math.max(1, total - keep);          // 计划删除第 1~cut 条（跳过开局白 index 0）
+        const unsafe = Math.max(0, cut - 1 - sumUntil); // 未进摘要就被删的消息数（AI将不再记得其中细节）
+        this.trimBox = { open: true, keep: this.trimBox.keep, total, cut, unsafe };
+      },
+      doTrim() {
+        const c = this.story.chat;
+        const msgs = c.messages;
+        const cut = this.trimBox.cut;
+        if (cut <= 1) { this.trimBox.open = false; return; }
+        msgs.splice(1, cut - 1);   // 保留 index 0（开局白）与最后 keep 条
+        /* 收敛压缩游标：被删区间的已摘要消息同步左移，避免历史窗口错位 */
+        c.summarizedUntil = Math.max(0, (c.summarizedUntil || 0) - (cut - 1));
+        c.lastSumLen = Math.max(0, (c.lastSumLen || 0) - (cut - 1));
+        this.trimBox.open = false;
+        this.$nextTick(() => { this.scrollBottom && this.scrollBottom(); });
+        this.toast('已瘦身：删除 ' + (cut - 1) + ' 条旧消息', '🧹');
+      },
       spawnAffFx(fxList) {
         (fxList || []).forEach((fx, i) => {
           const id = PW.Store.uid('fx');

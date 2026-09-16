@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <script>window.__HTML_BUILD__='20260916-a';</script>
+  <script>window.__HTML_BUILD__='20260916-b';</script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#0e1320">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -10,13 +10,13 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icon.svg">
-  <link rel="stylesheet" href="css/base.css?v=28">
-  <link rel="stylesheet" href="css/shelf.css?v=28">
-  <link rel="stylesheet" href="css/story.css?v=28">
-  <link rel="stylesheet" href="css/npc.css?v=28">
-  <link rel="stylesheet" href="css/editor.css?v=28">
-  <link rel="stylesheet" href="css/phone.css?v=28">
-  <script src="js/vendor/vue.global.prod.js?v=28"></script>
+  <link rel="stylesheet" href="css/base.css?v=29">
+  <link rel="stylesheet" href="css/shelf.css?v=29">
+  <link rel="stylesheet" href="css/story.css?v=29">
+  <link rel="stylesheet" href="css/npc.css?v=29">
+  <link rel="stylesheet" href="css/editor.css?v=29">
+  <link rel="stylesheet" href="css/phone.css?v=29">
+  <script src="js/vendor/vue.global.prod.js?v=29"></script>
   <script>
     /* vendor 缺失时回退 CDN */
     if (!window.Vue) document.write('<script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"><\/script>');
@@ -831,6 +831,7 @@
         <div class="plot-tools">
           <button class="tool" @click="dice" :disabled="busy"><svg class="ico"><use href="#i-dice"/></svg>随机事件</button>
           <button class="tool" :class="{on: oocMode}" @click="oocMode=!oocMode" title="作者指令，不进入剧情">OOC</button>
+          <button class="tool" @click="askTrim" :disabled="busy" title="删除旧消息，保留近几轮，界面更流畅">🧹 瘦身</button>
         </div>
         <div class="inputbar">
           <textarea v-model="inputText" ref="inputBox" rows="1" :placeholder="oocMode ? 'OOC作者指令：如（让张三明天再出现）' : '你要做什么/说什么？'"
@@ -1258,6 +1259,32 @@
     </div>
   </div>
 
+  <!-- 剧情瘦身 -->
+  <div class="mask" v-if="trimBox.open" @click.self="trimBox.open=false">
+    <div class="modal" style="width:min(88vw,380px)">
+      <h3>🧹 剧情瘦身</h3>
+      <p style="font-size:13px;color:var(--ink2);margin:8px 0 12px">
+        当前共 <b>{{ trimBox.total }}</b> 条消息。界面卡是因为消息列表全量渲染，越聊越卡；
+        已压缩进前情提要的旧内容 AI 本来就不看，删掉后<b>剧情记忆不受影响</b>，界面会明显变流畅。
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button v-for="k in [20,40,80]" :key="k" class="btn sm"
+          :class="trimBox.keep===k ? 'danger' : 'ghost'"
+          :disabled="trimBox.total<=k" style="flex:1"
+          @click="trimBox.keep=k; askTrim()">保留{{ k }}条</button>
+      </div>
+      <p style="font-size:12px;color:var(--ink2);margin-bottom:14px">
+        将删除最早的 <b>{{ trimBox.cut > 1 ? trimBox.cut - 1 : 0 }}</b> 条（始终保留开局白）。
+        <span v-if="trimBox.unsafe>0" style="color:var(--warn)">⚠ 其中 {{ trimBox.unsafe }} 条尚未压缩进前情提要，删除后 AI 不再记得这些细节。</span>
+        <span v-else style="color:var(--ok)">✓ 将删除的消息都已在前情提要里，剧情记忆无损。</span>
+      </p>
+      <div style="display:flex;gap:10px">
+        <button class="btn" style="flex:1" @click="trimBox.open=false">取消</button>
+        <button class="btn danger" style="flex:1" @click="doTrim">确认瘦身</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 发起群聊 -->
   <div class="mask" v-if="groupModal.open" @click.self="groupModal.open=false">
     <div class="modal">
@@ -1346,16 +1373,16 @@
   </div>
 </div>
 
-<script src="js/config.js?v=28"></script>
-<script src="js/templates.js?v=28"></script>
-<script src="js/store.js?v=28"></script>
-<script src="js/api.js?v=28"></script>
-<script src="js/rag.js?v=28"></script>
-<script src="js/prompts.js?v=28"></script>
-<script src="js/avatars.js?v=28"></script>
-<script src="js/affinity.js?v=28"></script>
-<script src="js/randomnpc.js?v=28"></script>
-<script src="js/phone.js?v=28"></script>
-<script src="js/app.js?v=28"></script>
+<script src="js/config.js?v=29"></script>
+<script src="js/templates.js?v=29"></script>
+<script src="js/store.js?v=29"></script>
+<script src="js/api.js?v=29"></script>
+<script src="js/rag.js?v=29"></script>
+<script src="js/prompts.js?v=29"></script>
+<script src="js/avatars.js?v=29"></script>
+<script src="js/affinity.js?v=29"></script>
+<script src="js/randomnpc.js?v=29"></script>
+<script src="js/phone.js?v=29"></script>
+<script src="js/app.js?v=29"></script>
 </body>
 </html>
